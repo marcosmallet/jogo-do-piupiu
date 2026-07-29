@@ -288,6 +288,7 @@
         <button id="debug-collision" type="button">Forçar colisão</button>
         <button id="debug-score" type="button">Forçar ponto</button>
         <button id="debug-fairness" type="button">Abrir corredor</button>
+        <button id="debug-fallback" type="button">Testar fallback</button>
         <button id="debug-finish" type="button">Encerrar</button>
         <button id="debug-reset" type="button">Reiniciar</button>
       </div>
@@ -370,11 +371,17 @@
         this.walkStep = 0;
         this.walkStepCount = 0;
         this.resumePromise = null;
+        this.fallbackAudio = this.createFallbackAudio();
+        this.fallbackReady = false;
+        this.fallbackPriming = false;
         button.addEventListener("click", () => this.toggle());
         const unlockOnInteraction = () => {
           if (this.enabled) this.unlock();
         };
         window.addEventListener("pointerdown", unlockOnInteraction, { once: true, capture: true });
+        window.addEventListener("touchstart", unlockOnInteraction, { once: true, capture: true, passive: true });
+        window.addEventListener("mousedown", unlockOnInteraction, { once: true, capture: true });
+        window.addEventListener("click", unlockOnInteraction, { once: true, capture: true });
         window.addEventListener("keydown", unlockOnInteraction, { once: true, capture: true });
       }
       ensureContext() {
@@ -384,27 +391,134 @@
         }
         return this.context;
       }
+      createFallbackAudio() {
+        if (!window.Audio || !window.Blob || !window.URL?.createObjectURL) return null;
+        try {
+          const sampleRate = 16000;
+          const duration = .12;
+          const sampleCount = Math.floor(sampleRate * duration);
+          const buffer = new ArrayBuffer(44 + sampleCount * 2);
+          const view = new DataView(buffer);
+          const writeText = (offset, text) => {
+            for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+          };
+          writeText(0, "RIFF"); view.setUint32(4, 36 + sampleCount * 2, true);
+          writeText(8, "WAVE"); writeText(12, "fmt ");
+          view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+          view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true);
+          view.setUint16(34, 16, true); writeText(36, "data");
+          view.setUint32(40, sampleCount * 2, true);
+          for (let i = 0; i < sampleCount; i++) {
+            const t = i / sampleRate;
+            const attack = Math.min(1, i / (sampleRate * .008));
+            const release = Math.pow(1 - i / sampleCount, 2.4);
+            const wave = Math.sin(Math.PI * 2 * 410 * t) * .72 +
+              Math.sin(Math.PI * 2 * 860 * t) * .18;
+            view.setInt16(44 + i * 2, wave * attack * release * 24500, true);
+          }
+          const url = URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
+          const audio = new Audio(url);
+          audio.preload = "auto";
+          audio.setAttribute("playsinline", "");
+          audio.volume = .82;
+          return audio;
+        } catch (_) {
+          return null;
+        }
+      }
+      primeFallback() {
+        const audio = this.fallbackAudio;
+        if (!audio || this.fallbackReady || this.fallbackPriming) return;
+        this.fallbackPriming = true;
+        const finish = () => {
+          try { audio.pause(); audio.currentTime = 0; audio.volume = .82; } catch (_) {}
+          this.fallbackReady = true;
+          this.fallbackPriming = false;
+          this.refreshButton();
+        };
+        try {
+          audio.volume = 0;
+          const result = audio.play();
+          if (result?.then) result.then(finish, () => { this.fallbackPriming = false; });
+          else finish();
+        } catch (_) {
+          this.fallbackPriming = false;
+        }
+      }
+      playFallback(name) {
+        const audio = this.fallbackAudio;
+        if (!audio || !this.fallbackReady || !this.enabled) return false;
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+          const rates = { start: 1.35, confirm: 1.18, hit: .68, score: 1.55, over: .58 };
+          audio.playbackRate = name === "step"
+            ? (this.walkStep++ % 2 ? .9 : 1.1)
+            : rates[name] || 1;
+          audio.volume = .82;
+          const result = audio.play();
+          if (result?.catch) result.catch(() => {});
+          if (name === "step") this.walkStepCount += 1;
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
+      primeContext(ctx) {
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+        } catch (_) {
+          try {
+            const oscillator = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            oscillator.connect(gain).connect(ctx.destination);
+            oscillator.start(0);
+            oscillator.stop(ctx.currentTime + .01);
+          } catch (_) {}
+        }
+      }
       unlock() {
         const ctx = this.ensureContext();
-        if (!ctx) return Promise.resolve(false);
+        if (!ctx) {
+          this.primeFallback();
+          return Promise.resolve(false);
+        }
+        if (!ctx.state) {
+          this.primeContext(ctx);
+          return Promise.resolve(true);
+        }
         if (ctx.state === "running") return Promise.resolve(true);
+        this.primeContext(ctx);
+        this.primeFallback();
+        if (typeof ctx.resume !== "function") return Promise.resolve(ctx.state !== "closed");
         if (!this.resumePromise) {
-          this.resumePromise = ctx.resume()
-            .then(() => ctx.state === "running")
-            .catch(() => false)
-            .finally(() => { this.resumePromise = null; });
+          let resumeResult;
+          try { resumeResult = ctx.resume(); } catch (_) { resumeResult = Promise.resolve(false); }
+          this.resumePromise = Promise.resolve(resumeResult)
+            .then(() => ctx.state === "running", () => false)
+            .then((ready) => {
+              this.resumePromise = null;
+              return ready;
+            });
         }
         return this.resumePromise;
       }
       refreshButton() {
-        const blocked = this.enabled && this.context && this.context.state !== "running";
+        const blocked = this.enabled && this.context && this.context.state &&
+          this.context.state !== "running" && !this.fallbackReady;
         this.button.classList.toggle("needs-activation", !!blocked);
         this.button.textContent = this.enabled ? "🔊" : "🔇";
         this.button.setAttribute("aria-label", blocked ? "Ativar som" : this.enabled ? "Desativar som" : "Ativar som");
         this.button.title = blocked ? "Clique para liberar o áudio" : "Ativar ou desativar som";
       }
       toggle() {
-        if (this.enabled && this.context && this.context.state !== "running") {
+        if (this.enabled && this.context && this.context.state !== "running" && !this.fallbackReady) {
           this.unlock().then((ready) => {
             this.refreshButton();
             if (ready) this.scheduleTone("confirm");
@@ -418,16 +532,21 @@
       play(name, onBlocked) {
         if (!this.enabled) return;
         const ctx = this.ensureContext();
-        if (!ctx) return;
+        if (!ctx) {
+          this.primeFallback();
+          const played = this.playFallback(name);
+          if (!played && onBlocked) onBlocked();
+          return;
+        }
         this.unlock().then((ready) => {
           this.refreshButton();
           if (ready && this.enabled) this.scheduleTone(name);
-          else if (!ready && onBlocked) onBlocked();
+          else if (!this.playFallback(name) && onBlocked) onBlocked();
         });
       }
       scheduleTone(name) {
         const ctx = this.context;
-        if (!ctx || ctx.state !== "running") return;
+        if (!ctx || ctx.state === "closed") return;
         const presets = {
           start: [420, 620, .12], confirm: [520, 680, .07], hit: [120, 58, .2],
           score: [660, 980, .22], over: [340, 150, .34], step: [480, 230, .09]
@@ -591,6 +710,9 @@
         this.gamepadMove = dpadUp ? -1 : dpadDown ? 1 : vertical;
         const current = active.buttons.map((button) => !!button.pressed);
         const justPressed = (index) => current[index] && !this.gamepadPrevious[index];
+        if (this.game.audio.enabled && current.some((pressed, index) => pressed && !this.gamepadPrevious[index])) {
+          this.game.audio.unlock();
+        }
         if (this.game.state === "ready") {
           if (justPressed(12)) this.game.cycleDifficulty(-1);
           if (justPressed(13)) this.game.cycleDifficulty(1);
@@ -1074,6 +1196,7 @@
         this.shell = $("#game-shell"); this.canvas = $("#game-canvas");
         this.renderer = new Renderer(this.canvas);
         this.audio = new AudioManager($("#sound-button"));
+        if (this.isLikelyTV()) this.audio.ensureContext();
         this.particles = new ParticleSystem();
         this.debug = new URLSearchParams(location.search).get("debug") === "1";
         const requestedDuration = Number(new URLSearchParams(location.search).get("duration"));
@@ -1429,6 +1552,12 @@
         $("#debug-collision").addEventListener("click", () => this.handleCollision());
         $("#debug-score").addEventListener("click", () => this.scorePoint());
         $("#debug-fairness").addEventListener("click", () => this.startFairnessWindow());
+        $("#debug-fallback").addEventListener("click", () => {
+          const playFallback = () => this.audio.playFallback("step");
+          if (this.audio.context?.state === "running" && this.audio.context.suspend) {
+            this.audio.context.suspend().then(playFallback, playFallback);
+          } else playFallback();
+        });
         $("#debug-finish").addEventListener("click", () => this.finishGame());
         $("#debug-reset").addEventListener("click", () => this.resetGame(false));
         window.__gameTest = Object.freeze({
@@ -1481,6 +1610,7 @@ Por pista: ${snap.lanes.map((lane) => lane.count).join("/")}
 Partículas: ${snap.particles}
 Som: ${this.audio.enabled ? "ligado" : "desligado"}
 Contexto de áudio: ${this.audio.context?.state || "aguardando interação"}
+Fallback de áudio: ${this.audio.fallbackAudio ? (this.audio.fallbackReady ? "pronto" : "aguardando interação") : "indisponível"}
 Passos sonoros: ${this.audio.walkStepCount}
 Última tecla: ${this.input.lastKey}
 Gamepad: ${this.input.gamepadName}
