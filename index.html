@@ -23,6 +23,7 @@
     }
     body { display: grid; place-items: center; }
     button { font: inherit; }
+    body.tv-mode, body.tv-mode * { cursor: none !important; }
     #game-shell {
       position: relative; overflow: hidden; isolation: isolate;
       background: #142b20; box-shadow: 0 24px 80px #000b, 0 0 0 1px #ffffff18;
@@ -167,6 +168,10 @@
       pointer-events: none;
     }
     .touch #touch-controls { display: flex; }
+    #game-shell.tv #touch-controls {
+      display: none !important;
+      pointer-events: none !important;
+    }
     .touch-button {
       pointer-events: auto; width: clamp(74px, 17vw, 116px); aspect-ratio: 1;
       border: 2px solid #ffffffa3; border-radius: 28%;
@@ -608,13 +613,18 @@
         this.gamepadPrevious = [];
         this.lastKey = "—";
         this.gamepadName = "Nenhum";
-        this.touch = matchMedia("(pointer: coarse)").matches ||
+        this.tv = game.tvMode;
+        this.touch = !this.tv && (matchMedia("(pointer: coarse)").matches ||
           navigator.maxTouchPoints > 0 || "ontouchstart" in window ||
-          (game.debug && new URLSearchParams(location.search).get("touch") === "1");
+          (game.debug && new URLSearchParams(location.search).get("touch") === "1"));
+        shell.classList.toggle("tv", this.tv);
         shell.classList.toggle("touch", this.touch);
+        document.body.classList.toggle("tv-mode", this.tv);
         this.bindKeyboard();
-        this.bindTouch($("#touch-up"), "up");
-        this.bindTouch($("#touch-down"), "down");
+        if (!this.tv) {
+          this.bindTouch($("#touch-up"), "up");
+          this.bindTouch($("#touch-down"), "down");
+        }
         shell.addEventListener("contextmenu", (event) => event.preventDefault());
         window.addEventListener("gamepadconnected", (event) => {
           this.gamepadName = event.gamepad.id || "Gamepad";
@@ -636,6 +646,7 @@
         window.addEventListener("keydown", (event) => {
           const action = this.classify(event);
           if (!action) return;
+          if (this.touch && this.game.shouldPreferTVRemote()) this.activateTVMode();
           if (this.game.audio.enabled) this.game.audio.unlock();
           this.lastKey = `${event.key || "?"} / ${event.code || "?"} / ${event.keyCode || 0}`;
           event.preventDefault();
@@ -661,6 +672,16 @@
           if (action === "up") this.up = false;
           if (action === "down") this.down = false;
         }, { passive: false });
+      }
+      activateTVMode() {
+        this.tv = true;
+        this.touch = false;
+        this.clear();
+        this.game.tvMode = true;
+        this.shell.classList.add("tv");
+        this.shell.classList.remove("touch");
+        document.body.classList.add("tv-mode");
+        this.game.updateDeviceHint("tv");
       }
       bindTouch(button, direction) {
         const release = (event) => {
@@ -1194,9 +1215,10 @@
     class Game {
       constructor() {
         this.shell = $("#game-shell"); this.canvas = $("#game-canvas");
+        this.tvMode = this.isLikelyTV();
         this.renderer = new Renderer(this.canvas);
         this.audio = new AudioManager($("#sound-button"));
-        if (this.isLikelyTV()) this.audio.ensureContext();
+        if (this.tvMode) this.audio.ensureContext();
         this.particles = new ParticleSystem();
         this.debug = new URLSearchParams(location.search).get("debug") === "1";
         const requestedDuration = Number(new URLSearchParams(location.search).get("duration"));
@@ -1213,13 +1235,22 @@
         this.performance = new PerformanceManager(() => this.resizeCanvas(true));
         this.input = new InputManager(this, this.shell);
         this.bindUI(); this.resizeCanvas(false); this.resetGame(true);
-        this.updateDeviceHint(this.input.touch ? "touch" : this.isLikelyTV() ? "tv" : "computer");
+        this.updateDeviceHint(this.input.touch ? "touch" : this.tvMode ? "tv" : "computer");
         if (this.debug) this.enableDebug();
         this.installLifecycleHandlers();
         requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
       }
       isLikelyTV() {
-        return /smart-tv|smarttv|googletv|android tv|hbbtv|netcast|web0s|tizen/i.test(navigator.userAgent);
+        const params = new URLSearchParams(location.search);
+        if (params.get("tv") === "1") return true;
+        const userAgent = navigator.userAgent || "";
+        return /smart[- ]?tv|google ?tv|android tv|sdk_google_atv|\batv\b|hbbtv|netcast|web0s|webos|tizen|aft[bmsty]|fire tv|bravia|viera|aquos|dtv|roku|crkey|chromecast|vidaa|hisense|philips tv|opera tv|mibox|mi box|shield android|nexus player|adt-1|television/i.test(userAgent);
+      }
+      shouldPreferTVRemote() {
+        if (this.tvMode) return true;
+        const landscape = innerWidth >= innerHeight;
+        const hasFinePointer = matchMedia("(any-hover: hover) and (any-pointer: fine)").matches;
+        return landscape && !hasFinePointer;
       }
       createWorld(width, height) {
         const safeTop = height * (height > width ? .142 : .145);
@@ -1412,7 +1443,7 @@
         const cssH = Math.max(1, Math.floor(logical.height * scale));
         this.shell.style.width = `${cssW}px`; this.shell.style.height = `${cssH}px`;
         let dprCap = this.performance?.low ? 1 : 2;
-        if (this.isLikelyTV()) dprCap = Math.min(dprCap, 1.5);
+        if (this.tvMode) dprCap = Math.min(dprCap, 1.5);
         const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
         const baseScale = cssW / logical.width;
         const pixelScale = Math.min(
@@ -1614,6 +1645,7 @@ Fallback de áudio: ${this.audio.fallbackAudio ? (this.audio.fallbackReady ? "pr
 Passos sonoros: ${this.audio.walkStepCount}
 Última tecla: ${this.input.lastKey}
 Gamepad: ${this.input.gamepadName}
+TV: ${this.input.tv ? "sim" : "não"}
 Touch: ${this.input.touch ? "sim" : "não"}`;
       }
     }
