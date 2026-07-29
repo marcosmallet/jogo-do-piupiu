@@ -31,7 +31,7 @@
     }
     canvas { display: block; width: 100%; height: 100%; }
     #hud {
-      position: absolute; z-index: 5; top: max(2.2%, env(safe-area-inset-top));
+      position: absolute; z-index: 5; top: max(5%, env(safe-area-inset-top));
       left: 5%; right: 5%; display: grid; grid-template-columns: 1fr auto 1fr;
       gap: clamp(6px, 1.2vw, 18px); pointer-events: none;
       filter: drop-shadow(0 4px 8px #0008);
@@ -536,6 +536,13 @@
       }
       play(name, onBlocked) {
         if (!this.enabled) return;
+        if (window.AndroidTvHost && typeof window.AndroidTvHost.playSound === "function") {
+          try {
+            window.AndroidTvHost.playSound(name);
+            if (name === "step") this.walkStepCount += 1;
+            return;
+          } catch (_) {}
+        }
         const ctx = this.ensureContext();
         if (!ctx) {
           this.primeFallback();
@@ -673,6 +680,38 @@
           if (action === "up") this.up = false;
           if (action === "down") this.down = false;
         }, { passive: false });
+      }
+      handleNative(action, pressed, repeat = false) {
+        if (!["up", "down", "confirm", "back", "start"].includes(action)) return false;
+        if (pressed && this.game.audio.enabled) this.game.audio.unlock();
+        this.lastKey = `Android TV: ${action} / ${pressed ? "pressionado" : "liberado"}`;
+        if (action === "up" || action === "down") {
+          if (this.game.state === "ready") {
+            if (pressed && !repeat) this.game.cycleDifficulty(action === "up" ? -1 : 1);
+            this.up = this.down = false;
+          } else {
+            this[action] = !!pressed;
+          }
+          return true;
+        }
+        if (!pressed || repeat) return true;
+        if (action === "confirm") {
+          this.game.handleConfirm();
+          return true;
+        }
+        if (action === "start") {
+          if (["playing", "hit", "celebrating"].includes(this.game.state)) this.game.pauseGame("controle");
+          else this.game.handleConfirm();
+          return true;
+        }
+        if (["playing", "hit", "celebrating"].includes(this.game.state)) {
+          this.game.pauseGame("voltar");
+        } else if (window.AndroidTvHost && typeof window.AndroidTvHost.exitApp === "function") {
+          window.AndroidTvHost.exitApp();
+        } else {
+          this.game.handleBack();
+        }
+        return true;
       }
       activateTVMode() {
         this.tv = true;
@@ -1219,17 +1258,20 @@
     class Game {
       constructor() {
         this.shell = $("#game-shell"); this.canvas = $("#game-canvas");
+        this.params = new URLSearchParams(location.search);
+        this.androidTvApp = this.params.get("app") === "androidtv";
         this.tvMode = this.isLikelyTV();
         this.renderer = new Renderer(this.canvas);
         this.audio = new AudioManager($("#sound-button"));
         if (this.tvMode) this.audio.ensureContext();
         this.particles = new ParticleSystem();
-        this.debug = new URLSearchParams(location.search).get("debug") === "1";
-        const requestedDuration = Number(new URLSearchParams(location.search).get("duration"));
+        this.debug = this.params.get("debug") === "1";
+        const requestedDuration = Number(this.params.get("duration"));
         this.duration = this.debug && requestedDuration > 0 ? clamp(requestedDuration, 1, CONFIG.duration) : CONFIG.duration;
         this.difficulty = "normal";
         this.state = "ready"; this.previousActiveState = "playing";
-        this.pointerLockStatus = this.tvMode ? "aguardando interação" : "não necessário";
+        this.pointerLockStatus = this.androidTvApp ? "controlado pelo aplicativo" :
+          this.tvMode ? "aguardando interação" : "não necessário";
         this.score = 0; this.best = this.loadBest(); this.timeLeft = this.duration;
         this.elapsed = 0; this.lastTimestamp = 0; this.hitTimer = 0; this.celebrationTimer = 0;
         this.cameraShake = 0; this.hitFlash = 0; this.toastTimer = 0;
@@ -1239,6 +1281,9 @@
         this.player = new Player();
         this.performance = new PerformanceManager(() => this.resizeCanvas(true));
         this.input = new InputManager(this, this.shell);
+        window.androidTvHandleKey = (action, pressed, repeat = false) =>
+          this.input.handleNative(String(action), !!pressed, !!repeat);
+        window.androidTvLifecycle = (event) => this.handleAndroidTvLifecycle(String(event));
         this.bindUI(); this.resizeCanvas(false); this.resetGame(true);
         this.installPointerLockHandlers();
         this.updateDeviceHint(this.input.touch ? "touch" : this.tvMode ? "tv" : "computer");
@@ -1263,6 +1308,10 @@
           document.mozPointerLockElement || null;
       }
       tryPointerLock() {
+        if (this.androidTvApp) {
+          this.pointerLockStatus = "controlado pelo aplicativo";
+          return;
+        }
         if (!this.tvMode || this.getPointerLockElement() === this.shell) return;
         const request = this.shell.requestPointerLock || this.shell.webkitRequestPointerLock ||
           this.shell.mozRequestPointerLock;
@@ -1292,6 +1341,25 @@
         ["pointerlockerror", "webkitpointerlockerror", "mozpointerlockerror"].forEach((type) =>
           document.addEventListener(type, () => { this.pointerLockStatus = "recusado"; })
         );
+      }
+      notifyAndroidTvState() {
+        if (!this.androidTvApp || !window.AndroidTvHost ||
+            typeof window.AndroidTvHost.setPlaying !== "function") return;
+        try {
+          window.AndroidTvHost.setPlaying(["playing", "hit", "celebrating"].includes(this.state));
+        } catch (_) {}
+      }
+      handleAndroidTvLifecycle(event) {
+        this.input.clear();
+        this.audio.stopWalking();
+        if (event === "pause" && ["playing", "hit", "celebrating"].includes(this.state)) {
+          this.pauseGame("sistema");
+        } else if (event === "resume" && this.state === "paused") {
+          this.lastTimestamp = performance.now();
+          this.showToast("Pressione Enter para continuar");
+        }
+        this.notifyAndroidTvState();
+        return this.state;
       }
       createWorld(width, height) {
         const safeTop = height * (height > width ? .142 : .145);
@@ -1340,7 +1408,7 @@
           paused: ["playing", "hit", "celebrating", "gameOver"], gameOver: ["playing"]
         };
         if (next !== this.state && !allowed[this.state]?.includes(next)) return false;
-        this.state = next; this.updateOverlays(); return true;
+        this.state = next; this.updateOverlays(); this.notifyAndroidTvState(); return true;
       }
       startGame() {
         if (this.state !== "ready") return;
@@ -1387,6 +1455,7 @@
           this.transition("playing"); this.audio.play("start");
           this.lastTimestamp = performance.now(); this.showToast("Nova partida!");
         }
+        this.notifyAndroidTvState();
       }
       handleConfirm() {
         if (this.state === "ready") this.startGame();
