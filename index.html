@@ -1,0 +1,1498 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#07190f">
+  <title>Travessia do Canarinho</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-rounded, "Segoe UI", system-ui, -apple-system, sans-serif;
+      --yellow: #ffd928;
+      --green: #19a85b;
+      --ink: #07190f;
+      --glass: rgba(5, 20, 13, .84);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; margin: 0; overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 25%, #153e28 0, #092317 38%, #04110b 100%);
+      color: #fff; overscroll-behavior: none;
+    }
+    body { display: grid; place-items: center; }
+    button { font: inherit; }
+    #game-shell {
+      position: relative; overflow: hidden; isolation: isolate;
+      background: #142b20; box-shadow: 0 24px 80px #000b, 0 0 0 1px #ffffff18;
+      touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: absolute; z-index: 5; top: max(2.2%, env(safe-area-inset-top));
+      left: 5%; right: 5%; display: grid; grid-template-columns: 1fr auto 1fr;
+      gap: clamp(6px, 1.2vw, 18px); pointer-events: none;
+      filter: drop-shadow(0 4px 8px #0008);
+    }
+    .hud-card {
+      min-width: 0; padding: clamp(7px, 1.1vw, 14px) clamp(10px, 1.7vw, 22px);
+      border: 1px solid #ffffff2b; border-radius: clamp(10px, 1.2vw, 18px);
+      background: linear-gradient(145deg, rgba(4,23,14,.9), rgba(12,57,35,.78));
+      box-shadow: inset 0 1px #ffffff1e, 0 5px 18px #0005;
+      backdrop-filter: blur(8px);
+    }
+    .hud-card:nth-child(2) { text-align: center; border-color: #ffd92866; }
+    .hud-card:last-child { text-align: right; }
+    .hud-label {
+      display: block; color: #b7d9c4; font-weight: 800; letter-spacing: .09em;
+      text-transform: uppercase; font-size: clamp(8px, 1vw, 13px); line-height: 1;
+    }
+    .hud-value {
+      display: block; margin-top: 4px; color: #fff; font-weight: 950;
+      font-variant-numeric: tabular-nums; font-size: clamp(18px, 3vw, 38px); line-height: .95;
+    }
+    #time-value { color: var(--yellow); letter-spacing: .04em; }
+    #sound-button {
+      position: absolute; z-index: 8; right: 5%; top: clamp(76px, 13%, 112px);
+      width: clamp(42px, 5.2vw, 60px); aspect-ratio: 1; border-radius: 50%;
+      border: 1px solid #ffffff35; color: white; background: #071c13c7;
+      cursor: pointer; font-size: clamp(18px, 2.4vw, 28px); line-height: 1;
+      box-shadow: 0 5px 16px #0007; touch-action: manipulation;
+    }
+    #sound-button:hover { background: #123a28e8; }
+    #sound-button.needs-activation {
+      border-color: #ffe45c; box-shadow: 0 0 0 4px #ffe45c55, 0 5px 16px #0007;
+      animation: soundPulse 1s ease-in-out infinite alternate;
+    }
+    @keyframes soundPulse { to { transform: scale(1.1); filter: brightness(1.25); } }
+    button:focus-visible {
+      outline: max(3px, .35vw) solid #fff;
+      outline-offset: max(3px, .3vw);
+      box-shadow: 0 0 0 max(7px, .65vw) #19a85b, 0 10px 30px #0008 !important;
+    }
+    .overlay {
+      position: absolute; z-index: 20; inset: 0; display: grid; place-items: center;
+      padding: 5%; background:
+        radial-gradient(circle at 50% 34%, rgba(16, 80, 48, .48), transparent 38%),
+        linear-gradient(#03120ad1, #020b07ef);
+      transition: opacity .2s ease;
+    }
+    .overlay[hidden] { display: none; }
+    .panel {
+      width: min(92%, 760px); max-height: 92%; overflow: auto; text-align: center;
+      padding: clamp(24px, 4vw, 54px); border: 1px solid #ffffff2c;
+      border-radius: clamp(22px, 3vw, 38px);
+      background: linear-gradient(145deg, rgba(9,45,27,.97), rgba(3,18,11,.97));
+      box-shadow: inset 0 1px #ffffff25, 0 30px 90px #000b;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      color: #d8f4e2; text-transform: uppercase; letter-spacing: .16em;
+      font-size: clamp(10px, 1.3vw, 15px); font-weight: 900;
+    }
+    .eyebrow::before, .eyebrow::after {
+      content: ""; width: 22px; height: 2px; background: var(--yellow);
+    }
+    h1, h2 { margin: 0; text-wrap: balance; }
+    h1 {
+      font-size: clamp(38px, 7.2vw, 88px); line-height: .87; letter-spacing: -.055em;
+      color: var(--yellow); text-shadow: 0 5px 0 #946a00, 0 13px 26px #0009;
+    }
+    h1 span { display: block; color: #fff; font-size: .62em; letter-spacing: -.035em; }
+    h2 { font-size: clamp(34px, 6vw, 72px); color: var(--yellow); }
+    .lead {
+      margin: clamp(18px, 3vw, 30px) auto 12px; max-width: 620px;
+      color: #dcece2; font-size: clamp(15px, 2vw, 21px); line-height: 1.45;
+    }
+    .instruction {
+      margin: 12px auto 18px; padding: 10px 16px; max-width: 520px;
+      border-radius: 14px; background: #0004; color: #fff;
+      font-weight: 800; font-size: clamp(14px, 1.8vw, 20px);
+    }
+    .instruction strong { color: var(--yellow); }
+    .difficulty-picker {
+      min-width: 0; max-width: 560px; margin: 12px auto 0; padding: 0;
+      border: 0;
+    }
+    .difficulty-picker legend {
+      width: 100%; margin-bottom: 7px; color: #b7d9c4; font-size: clamp(10px, 1.2vw, 14px);
+      font-weight: 900; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .difficulty-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .difficulty-option {
+      min-width: 0; min-height: 43px; padding: 6px 8px; border: 1px solid #ffffff32;
+      border-radius: 12px; color: #d8e9de; background: #071b12bd; cursor: pointer;
+      font-weight: 900; line-height: 1.05;
+    }
+    .difficulty-option span {
+      display: block; margin-top: 3px; color: #93baa0; font-size: clamp(8px, 1vw, 11px);
+      font-weight: 750;
+    }
+    .difficulty-option[aria-pressed="true"] {
+      color: #092014; border-color: #fff; background: linear-gradient(#ffe45c, #ffc400);
+      box-shadow: 0 0 0 3px #159653, 0 5px 14px #0006;
+    }
+    .difficulty-option[aria-pressed="true"] span { color: #31532e; }
+    #difficulty-description {
+      min-height: 17px; margin: 7px 0 0; color: #bcd6c5; font-size: clamp(10px, 1.15vw, 13px);
+    }
+    .primary-button {
+      min-width: min(100%, 310px); min-height: 58px; padding: 14px 28px;
+      border: 0; border-radius: 999px; color: #082012; cursor: pointer;
+      background: linear-gradient(#ffe45c, #ffc400); font-weight: 950;
+      font-size: clamp(18px, 2.5vw, 27px); text-transform: uppercase;
+      letter-spacing: .045em; box-shadow: 0 7px 0 #9a7100, 0 16px 32px #0008;
+    }
+    .primary-button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .primary-button:active { transform: translateY(5px); box-shadow: 0 2px 0 #9a7100, 0 8px 16px #0008; }
+    .meta { margin-top: 20px; color: #9fc9ae; font-size: clamp(12px, 1.5vw, 16px); }
+    .score-summary {
+      display: flex; justify-content: center; gap: 14px; margin: 24px auto 30px;
+    }
+    .score-summary div {
+      min-width: 120px; padding: 14px 18px; border-radius: 16px;
+      background: #ffffff0d; border: 1px solid #ffffff1f;
+    }
+    .score-summary span { display: block; color: #afd0ba; font-size: 13px; font-weight: 800; text-transform: uppercase; }
+    .score-summary strong { display: block; margin-top: 3px; font-size: clamp(30px, 5vw, 52px); color: #fff; }
+    #pause-overlay { background: #020a06c9; }
+    #pause-overlay .panel { width: min(86%, 520px); }
+    #touch-controls {
+      position: absolute; z-index: 9; left: 0; right: 0;
+      bottom: max(3%, env(safe-area-inset-bottom));
+      display: none; justify-content: space-between; align-items: end;
+      padding-left: max(4%, env(safe-area-inset-left));
+      padding-right: max(4%, env(safe-area-inset-right));
+      pointer-events: none;
+    }
+    .touch #touch-controls { display: flex; }
+    .touch-button {
+      pointer-events: auto; width: clamp(74px, 17vw, 116px); aspect-ratio: 1;
+      border: 2px solid #ffffffa3; border-radius: 28%;
+      background: linear-gradient(145deg, #173e2ccf, #04150dcf);
+      color: white; font-size: clamp(32px, 8vw, 58px); font-weight: 900;
+      box-shadow: inset 0 1px #ffffff35, 0 8px 28px #0009;
+      touch-action: none; -webkit-touch-callout: none;
+    }
+    .touch-button.pressed, .touch-button:active {
+      background: linear-gradient(145deg, #ffe45ce8, #e8a800e8); color: #092015;
+      transform: scale(.94); border-color: #fff;
+    }
+    #toast {
+      position: absolute; z-index: 7; top: 21%; left: 50%; translate: -50% 0;
+      padding: 10px 18px; border-radius: 999px; background: #06180ddd;
+      border: 1px solid #ffffff30; color: white; font-weight: 900;
+      opacity: 0; transform: translateY(8px); transition: .18s; pointer-events: none;
+      white-space: nowrap; font-size: clamp(13px, 1.7vw, 19px);
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #debug-panel {
+      position: absolute; z-index: 30; right: 8px; bottom: 8px; width: min(310px, 48%);
+      max-height: 48%; overflow: auto; padding: 8px 10px; border-radius: 8px;
+      color: #9cffb9; background: #00140ee6; border: 1px solid #4cff8777;
+      font: 11px/1.32 ui-monospace, SFMono-Regular, Consolas, monospace;
+      pointer-events: auto; white-space: pre-wrap;
+    }
+    #debug-panel[hidden] { display: none; }
+    #debug-panel label { display: block; margin-bottom: 5px; color: white; font: 700 12px system-ui; }
+    #debug-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0 7px; }
+    #debug-actions button {
+      flex: 1 1 42%; min-height: 25px; padding: 3px 5px; border: 1px solid #5bff8c77;
+      border-radius: 5px; color: #fff; background: #164d31; font: 700 10px system-ui;
+      cursor: pointer;
+    }
+    #debug-actions button:focus-visible { outline-width: 2px; outline-offset: 1px; box-shadow: none !important; }
+    @media (orientation: landscape) and (max-height: 800px) {
+      .panel { padding: 26px 34px; }
+      h1 { font-size: clamp(38px, 6vw, 68px); }
+      .lead { margin-top: 12px; line-height: 1.35; }
+      .difficulty-picker { margin-top: 8px; }
+      .instruction { margin: 8px auto 13px; }
+      .meta { margin-top: 13px; }
+    }
+    @media (orientation: portrait) {
+      #hud { top: max(1.6%, env(safe-area-inset-top)); left: 3.5%; right: 3.5%; }
+      #sound-button { right: 3.5%; top: 8.5%; }
+      .panel { width: 94%; }
+      .score-summary { flex-wrap: wrap; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: .001ms !important; animation-duration: .001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main id="game-shell" aria-label="Jogo Travessia do Canarinho">
+    <canvas id="game-canvas" aria-label="Área do jogo: atravesse dez pistas de trânsito"></canvas>
+
+    <section id="hud" aria-label="Placar">
+      <div class="hud-card"><span class="hud-label">Pontos</span><strong class="hud-value" id="score-value">0</strong></div>
+      <div class="hud-card"><span class="hud-label">Tempo</span><strong class="hud-value" id="time-value">02:16</strong></div>
+      <div class="hud-card"><span class="hud-label">Melhor</span><strong class="hud-value" id="best-value">0</strong></div>
+    </section>
+    <button id="sound-button" type="button" aria-label="Desativar som" title="Ativar ou desativar som">🔊</button>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <div id="touch-controls" aria-label="Controles de movimento">
+      <button class="touch-button" id="touch-up" type="button" aria-label="Mover para cima">▲</button>
+      <button class="touch-button" id="touch-down" type="button" aria-label="Mover para baixo">▼</button>
+    </div>
+
+    <section class="overlay" id="ready-overlay" aria-labelledby="game-title">
+      <div class="panel">
+        <div class="eyebrow">Desafio de travessia</div>
+        <h1 id="game-title"><span>Travessia do</span>Canarinho</h1>
+        <p class="lead">Ajude o canário mais valente do Brasil a vencer dez pistas. Desvie do trânsito e chegue ao gramado do outro lado!</p>
+        <fieldset class="difficulty-picker">
+          <legend>Escolha a dificuldade</legend>
+          <div class="difficulty-options">
+            <button class="difficulty-option" type="button" data-difficulty="easy" aria-pressed="false">Fácil<span>Mais espaço</span></button>
+            <button class="difficulty-option" type="button" data-difficulty="normal" aria-pressed="true">Normal<span>Equilibrado</span></button>
+            <button class="difficulty-option" type="button" data-difficulty="hard" aria-pressed="false">Difícil<span>Mais veloz</span></button>
+          </div>
+          <p id="difficulty-description" role="status" aria-live="polite">Trânsito moderado com boas oportunidades.</p>
+        </fieldset>
+        <p class="instruction"><strong id="device-label">Teclado</strong> · <span id="device-instruction">Use ↑, ↓ ou W e S</span></p>
+        <button class="primary-button" id="start-button" type="button" aria-label="Começar partida">Começar</button>
+        <p class="meta">Partida de 02:16 · Sem vidas · Cada travessia vale 1 ponto</p>
+      </div>
+    </section>
+
+    <section class="overlay" id="pause-overlay" aria-labelledby="pause-title" hidden>
+      <div class="panel">
+        <div class="eyebrow">Jogo interrompido</div>
+        <h2 id="pause-title">Pausado</h2>
+        <p class="lead">O cronômetro está parado. Pressione Enter ou o botão principal para continuar.</p>
+        <button class="primary-button" id="resume-button" type="button">Continuar</button>
+      </div>
+    </section>
+
+    <section class="overlay" id="gameover-overlay" aria-labelledby="gameover-title" hidden>
+      <div class="panel">
+        <div class="eyebrow">Tempo esgotado</div>
+        <h2 id="gameover-title">Fim de Jogo</h2>
+        <div class="score-summary">
+          <div><span>Pontuação</span><strong id="final-score">0</strong></div>
+          <div><span>Melhor</span><strong id="final-best">0</strong></div>
+        </div>
+        <button class="primary-button" id="restart-button" type="button">Jogar Novamente</button>
+        <p class="meta">Pressione Enter para uma nova travessia</p>
+      </div>
+    </section>
+
+    <aside id="debug-panel" hidden aria-label="Diagnóstico">
+      <label><input id="debug-hitboxes" type="checkbox"> Exibir hitboxes</label>
+      <div id="debug-actions">
+        <button id="debug-middle" type="button">Posição central</button>
+        <button id="debug-collision" type="button">Forçar colisão</button>
+        <button id="debug-score" type="button">Forçar ponto</button>
+        <button id="debug-fairness" type="button">Abrir corredor</button>
+        <button id="debug-finish" type="button">Encerrar</button>
+        <button id="debug-reset" type="button">Reiniciar</button>
+      </div>
+      <span id="debug-text"></span>
+    </aside>
+  </main>
+
+  <script>
+  (() => {
+    "use strict";
+
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+        const r = Math.min(Math.abs(Number(radius) || 0), Math.abs(width) / 2, Math.abs(height) / 2);
+        this.moveTo(x + r, y);
+        this.arcTo(x + width, y, x + width, y + height, r);
+        this.arcTo(x + width, y + height, x, y + height, r);
+        this.arcTo(x, y + height, x, y, r);
+        this.arcTo(x, y, x + width, y, r);
+        this.closePath();
+        return this;
+      };
+    }
+
+    const CONFIG = Object.freeze({
+      duration: 136,
+      layouts: {
+        portrait: { width: 720, height: 1280 },
+        landscape: { width: 1280, height: 720 }
+      },
+      laneCount: 10,
+      playerSpeedLanes: 3.15,
+      difficulties: {
+        easy: {
+          label: "Fácil", initialVehicles: 1, maxVehicles: 1,
+          speedMultiplier: .70, spawnBase: 4.6, spawnJitter: 1.2,
+          reactionTime: 1.6, fairnessInterval: 14,
+          description: "Só um veículo por pista, lento e bem espaçado."
+        },
+        normal: {
+          label: "Normal", initialVehicles: 1, maxVehicles: 2,
+          speedMultiplier: .86, spawnBase: 3.6, spawnJitter: 1,
+          reactionTime: 1.1, fairnessInterval: 18,
+          description: "Trânsito moderado com boas oportunidades."
+        },
+        hard: {
+          label: "Difícil", initialVehicles: 2, maxVehicles: 3,
+          speedMultiplier: 1, spawnBase: 2.8, spawnJitter: .8,
+          reactionTime: .75, fairnessInterval: 22,
+          description: "Mais veloz, mas nenhuma pista fica fechada."
+        }
+      },
+      hitDuration: .34,
+      celebrationDuration: .72,
+      invulnerability: 1.05,
+      gamepadDeadzone: .35,
+      maxDelta: .05,
+      particleLimit: 90,
+      lowParticleLimit: 28,
+      maxInternalWidth: 2560,
+      maxInternalHeight: 1440
+    });
+
+    const $ = (selector) => document.querySelector(selector);
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rectsOverlap = (a, b) =>
+      a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    const formatTime = (seconds) => {
+      const safe = Math.max(0, Math.ceil(seconds));
+      return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+    };
+
+    class AudioManager {
+      constructor(button) {
+        this.button = button;
+        this.enabled = true;
+        this.context = null;
+        this.walkTimer = 0;
+        this.walkStep = 0;
+        this.walkStepCount = 0;
+        this.resumePromise = null;
+        button.addEventListener("click", () => this.toggle());
+        const unlockOnInteraction = () => {
+          if (this.enabled) this.unlock();
+        };
+        window.addEventListener("pointerdown", unlockOnInteraction, { once: true, capture: true });
+        window.addEventListener("keydown", unlockOnInteraction, { once: true, capture: true });
+      }
+      ensureContext() {
+        if (!this.context) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.context = new AudioContext();
+        }
+        return this.context;
+      }
+      unlock() {
+        const ctx = this.ensureContext();
+        if (!ctx) return Promise.resolve(false);
+        if (ctx.state === "running") return Promise.resolve(true);
+        if (!this.resumePromise) {
+          this.resumePromise = ctx.resume()
+            .then(() => ctx.state === "running")
+            .catch(() => false)
+            .finally(() => { this.resumePromise = null; });
+        }
+        return this.resumePromise;
+      }
+      refreshButton() {
+        const blocked = this.enabled && this.context && this.context.state !== "running";
+        this.button.classList.toggle("needs-activation", !!blocked);
+        this.button.textContent = this.enabled ? "🔊" : "🔇";
+        this.button.setAttribute("aria-label", blocked ? "Ativar som" : this.enabled ? "Desativar som" : "Ativar som");
+        this.button.title = blocked ? "Clique para liberar o áudio" : "Ativar ou desativar som";
+      }
+      toggle() {
+        if (this.enabled && this.context && this.context.state !== "running") {
+          this.unlock().then((ready) => {
+            this.refreshButton();
+            if (ready) this.scheduleTone("confirm");
+          });
+          return;
+        }
+        this.enabled = !this.enabled;
+        this.refreshButton();
+        if (this.enabled) this.play("confirm");
+      }
+      play(name, onBlocked) {
+        if (!this.enabled) return;
+        const ctx = this.ensureContext();
+        if (!ctx) return;
+        this.unlock().then((ready) => {
+          this.refreshButton();
+          if (ready && this.enabled) this.scheduleTone(name);
+          else if (!ready && onBlocked) onBlocked();
+        });
+      }
+      scheduleTone(name) {
+        const ctx = this.context;
+        if (!ctx || ctx.state !== "running") return;
+        const presets = {
+          start: [420, 620, .12], confirm: [520, 680, .07], hit: [120, 58, .2],
+          score: [660, 980, .22], over: [340, 150, .34], step: [480, 230, .09]
+        };
+        let [from, to, duration] = presets[name] || presets.confirm;
+        if (name === "step") {
+          const variation = this.walkStep++ % 2 ? .86 : 1.12;
+          from *= variation; to *= variation;
+          this.walkStepCount += 1;
+        }
+        try {
+          const oscillator = ctx.createOscillator();
+          const gain = ctx.createGain();
+          oscillator.type = name === "hit" ? "sawtooth" : "triangle";
+          oscillator.frequency.setValueAtTime(from, ctx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, to), ctx.currentTime + duration);
+          gain.gain.setValueAtTime(.0001, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(name === "step" ? .13 : .14, ctx.currentTime + .012);
+          gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + duration);
+          oscillator.connect(gain).connect(ctx.destination);
+          oscillator.start(); oscillator.stop(ctx.currentTime + duration + .02);
+          if (name === "step") {
+            const click = ctx.createOscillator();
+            const clickGain = ctx.createGain();
+            click.type = "square";
+            click.frequency.setValueAtTime(920 * (this.walkStep % 2 ? 1 : .82), ctx.currentTime);
+            click.frequency.exponentialRampToValueAtTime(420, ctx.currentTime + .035);
+            clickGain.gain.setValueAtTime(.055, ctx.currentTime);
+            clickGain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .038);
+            click.connect(clickGain).connect(ctx.destination);
+            click.start(); click.stop(ctx.currentTime + .045);
+          }
+        } catch (_) {}
+      }
+      updateWalking(active, dt) {
+        if (!active || !this.enabled) {
+          this.walkTimer = 0;
+          return;
+        }
+        this.walkTimer -= dt;
+        if (this.walkTimer <= 0) {
+          this.play("step");
+          this.walkTimer = .23;
+        }
+      }
+      stopWalking() {
+        this.walkTimer = 0;
+      }
+    }
+
+    class InputManager {
+      constructor(game, shell) {
+        this.game = game;
+        this.shell = shell;
+        this.up = false;
+        this.down = false;
+        this.pointerDirections = new Map();
+        this.gamepadMove = 0;
+        this.gamepadPrevious = [];
+        this.lastKey = "—";
+        this.gamepadName = "Nenhum";
+        this.touch = matchMedia("(pointer: coarse)").matches ||
+          navigator.maxTouchPoints > 0 || "ontouchstart" in window ||
+          (game.debug && new URLSearchParams(location.search).get("touch") === "1");
+        shell.classList.toggle("touch", this.touch);
+        this.bindKeyboard();
+        this.bindTouch($("#touch-up"), "up");
+        this.bindTouch($("#touch-down"), "down");
+        shell.addEventListener("contextmenu", (event) => event.preventDefault());
+        window.addEventListener("gamepadconnected", (event) => {
+          this.gamepadName = event.gamepad.id || "Gamepad";
+          game.updateDeviceHint("gamepad");
+        });
+        window.addEventListener("gamepaddisconnected", () => { this.gamepadName = "Nenhum"; });
+      }
+      classify(event) {
+        const key = String(event.key || "").toLowerCase();
+        const code = event.code || "";
+        const legacy = event.keyCode;
+        if (key === "arrowup" || key === "w" || code === "ArrowUp" || code === "KeyW" || legacy === 38) return "up";
+        if (key === "arrowdown" || key === "s" || code === "ArrowDown" || code === "KeyS" || legacy === 40) return "down";
+        if (key === "enter" || code === "Enter" || legacy === 13) return "confirm";
+        if (key === "escape" || key === "backspace" || code === "Escape" || code === "Backspace" || legacy === 8 || legacy === 27) return "back";
+        return null;
+      }
+      bindKeyboard() {
+        window.addEventListener("keydown", (event) => {
+          const action = this.classify(event);
+          if (!action) return;
+          if (this.game.audio.enabled) this.game.audio.unlock();
+          this.lastKey = `${event.key || "?"} / ${event.code || "?"} / ${event.keyCode || 0}`;
+          event.preventDefault();
+          if ((action === "confirm" || action === "back") && event.repeat) return;
+          if (this.game.state === "ready" && (action === "up" || action === "down")) {
+            if (!event.repeat) this.game.cycleDifficulty(action === "up" ? -1 : 1);
+            return;
+          }
+          if (action === "confirm" && this.game.state === "ready" &&
+              document.activeElement?.classList.contains("difficulty-option")) {
+            this.game.setDifficulty(document.activeElement.dataset.difficulty);
+            return;
+          }
+          if (action === "up") this.up = true;
+          if (action === "down") this.down = true;
+          if (action === "confirm") this.game.handleConfirm();
+          if (action === "back") this.game.handleBack();
+        }, { passive: false });
+        window.addEventListener("keyup", (event) => {
+          const action = this.classify(event);
+          if (!action) return;
+          event.preventDefault();
+          if (action === "up") this.up = false;
+          if (action === "down") this.down = false;
+        }, { passive: false });
+      }
+      bindTouch(button, direction) {
+        const release = (event) => {
+          this.pointerDirections.delete(event.pointerId);
+          button.classList.remove("pressed");
+          try { if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId); } catch (_) {}
+          this.syncPointers();
+        };
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          if (this.game.audio.enabled) this.game.audio.unlock();
+          this.pointerDirections.set(event.pointerId, direction);
+          button.classList.add("pressed");
+          try { button.setPointerCapture(event.pointerId); } catch (_) {}
+          this.syncPointers();
+        });
+        ["pointerup", "pointercancel", "pointerleave", "lostpointercapture"].forEach((type) =>
+          button.addEventListener(type, release, { passive: false })
+        );
+      }
+      syncPointers() {
+        const values = [...this.pointerDirections.values()];
+        this.up = values.includes("up");
+        this.down = values.includes("down");
+      }
+      clear() {
+        this.up = this.down = false;
+        this.gamepadMove = 0;
+        this.pointerDirections.clear();
+        document.querySelectorAll(".touch-button").forEach((button) => button.classList.remove("pressed"));
+      }
+      updateGamepad() {
+        if (!navigator.getGamepads) return;
+        const pads = navigator.getGamepads();
+        let active = null;
+        for (const pad of pads) if (pad?.connected) { active = pad; break; }
+        if (!active) {
+          this.gamepadMove = 0;
+          this.gamepadName = "Nenhum";
+          return;
+        }
+        if (this.gamepadName === "Nenhum") this.game.updateDeviceHint("gamepad");
+        this.gamepadName = active.id || "Gamepad";
+        const vertical = Math.abs(active.axes?.[1] || 0) >= CONFIG.gamepadDeadzone ? active.axes[1] : 0;
+        const dpadUp = !!active.buttons?.[12]?.pressed;
+        const dpadDown = !!active.buttons?.[13]?.pressed;
+        this.gamepadMove = dpadUp ? -1 : dpadDown ? 1 : vertical;
+        const current = active.buttons.map((button) => !!button.pressed);
+        const justPressed = (index) => current[index] && !this.gamepadPrevious[index];
+        if (this.game.state === "ready") {
+          if (justPressed(12)) this.game.cycleDifficulty(-1);
+          if (justPressed(13)) this.game.cycleDifficulty(1);
+        }
+        if (justPressed(0)) this.game.handleConfirm();
+        if (justPressed(9)) {
+          if (["playing", "hit", "celebrating"].includes(this.game.state)) this.game.pauseGame("gamepad");
+          else this.game.handleConfirm();
+        }
+        if (justPressed(1) || justPressed(8)) this.game.handleBack();
+        this.gamepadPrevious = current;
+      }
+      movement() {
+        const keyboard = (this.down ? 1 : 0) - (this.up ? 1 : 0);
+        return clamp(keyboard || this.gamepadMove, -1, 1);
+      }
+    }
+
+    class ParticleSystem {
+      constructor() { this.items = []; this.pool = []; }
+      emit(x, y, count, palette, type = "spark", low = false) {
+        const allowed = low ? Math.ceil(count * .4) : count;
+        for (let i = 0; i < allowed; i++) {
+          const particle = this.pool.pop() || {};
+          const angle = type === "score" ? Math.random() * Math.PI * 2 : Math.PI + (Math.random() - .5) * 2.6;
+          const speed = 55 + Math.random() * 170;
+          Object.assign(particle, {
+            x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (type === "score" ? 60 : 0),
+            gravity: type === "confetti" ? 55 : 190, life: .45 + Math.random() * .55,
+            maxLife: .45 + Math.random() * .55, size: 3 + Math.random() * 7,
+            color: palette[(Math.random() * palette.length) | 0], rotation: Math.random() * Math.PI,
+            spin: (Math.random() - .5) * 10, type
+          });
+          particle.maxLife = particle.life;
+          this.items.push(particle);
+        }
+      }
+      update(dt, low) {
+        const limit = low ? CONFIG.lowParticleLimit : CONFIG.particleLimit;
+        while (this.items.length > limit) this.pool.push(this.items.shift());
+        for (let i = this.items.length - 1; i >= 0; i--) {
+          const p = this.items[i];
+          p.life -= dt;
+          if (p.life <= 0) { this.pool.push(p); this.items.splice(i, 1); continue; }
+          p.vy += p.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rotation += p.spin * dt;
+        }
+      }
+      draw(ctx) {
+        for (const p of this.items) {
+          ctx.save(); ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1);
+          ctx.translate(p.x, p.y); ctx.rotate(p.rotation); ctx.fillStyle = p.color;
+          if (p.type === "spark") {
+            ctx.beginPath(); ctx.arc(0, 0, p.size * .55, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.fillRect(-p.size, -p.size * .35, p.size * 2, p.size * .7);
+          }
+          ctx.restore();
+        }
+      }
+      reset() { this.pool.push(...this.items); this.items.length = 0; }
+    }
+
+    class Player {
+      constructor() {
+        this.x = 0; this.y = 0; this.width = 0; this.height = 0;
+        this.state = "idle"; this.animTime = 0; this.invulnerable = 0;
+      }
+      configure(world, preserveProgress = null) {
+        this.width = world.laneH * .78;
+        this.height = world.laneH * 1.05;
+        this.x = world.width / 2;
+        if (preserveProgress == null) this.y = world.bottomSafeCenter;
+        else this.y = lerp(world.topLimit, world.bottomLimit, clamp(preserveProgress, 0, 1));
+      }
+      progress(world) { return (this.y - world.topLimit) / (world.bottomLimit - world.topLimit); }
+      get hitbox() {
+        return { x: this.x - this.width * .4, y: this.y - this.height * .4, w: this.width * .8, h: this.height * .8 };
+      }
+      reset(world) {
+        this.configure(world); this.state = "idle"; this.animTime = 0; this.invulnerable = 0;
+      }
+    }
+
+    const VEHICLE_TYPES = Object.freeze({
+      sport: { length: 1.62, height: .64, name: "Esportivo" },
+      sedan: { length: 2.05, height: .71, name: "Sedã" },
+      suv: { length: 2.25, height: .79, name: "SUV" },
+      truck: { length: 3.7, height: .83, name: "Caminhão" }
+    });
+    const VEHICLE_COLORS = ["#e94141", "#2f85e8", "#f4b629", "#20a86b", "#e96f22", "#845dc4", "#e9ecef"];
+
+    class Lane {
+      constructor(index) {
+        this.index = index;
+        this.direction = index % 2 === 0 ? 1 : -1;
+        this.difficulty = index / 9;
+        this.speedFactor = .72 + index * .065;
+        this.spawnTimer = 0;
+        this.vehicles = [];
+      }
+      allowedTypes() {
+        if (this.index < 2) return ["sedan", "sport"];
+        if (this.index < 5) return ["sport", "sedan", "suv"];
+        return ["sport", "sedan", "suv", "truck"];
+      }
+      setup(world, settings) {
+        this.vehicles.length = 0;
+        const count = settings.initialVehicles;
+        for (let i = 0; i < count; i++) {
+          const choices = this.allowedTypes();
+          const type = choices[(i + this.index) % choices.length];
+          const position = ((i + .5) / count) * world.width;
+          const x = this.direction > 0 ? position : world.width - position;
+          const vehicle = this.makeVehicle(x, type, world, settings);
+          if (this.canSpawn(x, vehicle.width, world, settings)) this.vehicles.push(vehicle);
+        }
+        this.spawnTimer = settings.spawnBase * .72 + Math.random() * settings.spawnJitter;
+      }
+      makeVehicle(x, type, world, settings) {
+        const spec = VEHICLE_TYPES[type];
+        return {
+          x, type, color: VEHICLE_COLORS[(this.index * 2 + this.vehicles.length) % VEHICLE_COLORS.length],
+          width: world.laneH * spec.length, height: world.laneH * spec.height,
+          speed: world.width * (.105 + this.speedFactor * .026) * settings.speedMultiplier
+        };
+      }
+      resize(oldWorld, world, settings) {
+        const sx = world.width / oldWorld.width;
+        for (const vehicle of this.vehicles) {
+          vehicle.x *= sx;
+          const spec = VEHICLE_TYPES[vehicle.type];
+          vehicle.width = world.laneH * spec.length; vehicle.height = world.laneH * spec.height;
+          vehicle.speed = world.width * (.105 + this.speedFactor * .026) * settings.speedMultiplier;
+        }
+      }
+      update(dt, world, settings, fairnessActive) {
+        const direction = this.direction;
+        for (let i = this.vehicles.length - 1; i >= 0; i--) {
+          const vehicle = this.vehicles[i];
+          if (!(fairnessActive && vehicle.fairnessHold)) vehicle.x += direction * vehicle.speed * dt;
+          if ((direction > 0 && vehicle.x - vehicle.width / 2 > world.width + world.laneH) ||
+              (direction < 0 && vehicle.x + vehicle.width / 2 < -world.laneH)) {
+            this.vehicles.splice(i, 1);
+          }
+        }
+        this.spawnTimer -= dt;
+        if (!fairnessActive && this.spawnTimer <= 0 && this.vehicles.length < settings.maxVehicles) {
+          const choices = this.allowedTypes();
+          const type = choices[(Math.random() * choices.length) | 0];
+          const spec = VEHICLE_TYPES[type];
+          const width = world.laneH * spec.length;
+          const x = direction > 0 ? -width / 2 - world.laneH * .2 : world.width + width / 2 + world.laneH * .2;
+          if (this.canSpawn(x, width, world, settings)) {
+            this.vehicles.push(this.makeVehicle(x, type, world, settings));
+            const laneAdjustment = this.difficulty * .22;
+            this.spawnTimer = settings.spawnBase - laneAdjustment + Math.random() * settings.spawnJitter;
+          } else this.spawnTimer = .12;
+        }
+      }
+      minimumOpenTime(settings) {
+        const crossingTime = 1 / CONFIG.playerSpeedLanes;
+        return crossingTime + settings.reactionTime;
+      }
+      canSpawn(spawnX, newWidth, world, settings) {
+        if (!this.vehicles.length) return true;
+        const nearest = this.vehicles.reduce((best, vehicle) =>
+          Math.abs(vehicle.x - spawnX) < Math.abs(best.x - spawnX) ? vehicle : best
+        );
+        const clearDistance = (nearest.width + newWidth) / 2;
+        const guaranteedGap = nearest.speed * this.minimumOpenTime(settings);
+        return Math.abs(nearest.x - spawnX) >= clearDistance + guaranteedGap;
+      }
+      y(world) { return world.roadTop + this.index * world.laneH + world.laneH / 2; }
+      getRect(vehicle, world) {
+        return {
+          x: vehicle.x - vehicle.width * .46, y: this.y(world) - vehicle.height * .42,
+          w: vehicle.width * .92, h: vehicle.height * .84
+        };
+      }
+    }
+
+    class PerformanceManager {
+      constructor(onModeChange) {
+        this.samples = []; this.average = 60; this.current = 60;
+        this.low = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        this.lowSeconds = 0; this.goodSeconds = 0; this.onModeChange = onModeChange;
+      }
+      sample(dt) {
+        const fps = dt > 0 ? 1 / dt : 60;
+        this.current = lerp(this.current, fps, .18);
+        this.samples.push(fps);
+        if (this.samples.length > 120) this.samples.shift();
+        this.average = this.samples.reduce((sum, value) => sum + value, 0) / this.samples.length;
+        if (this.average < 40) { this.lowSeconds += dt; this.goodSeconds = 0; }
+        else if (this.average > 52) { this.goodSeconds += dt; this.lowSeconds = Math.max(0, this.lowSeconds - dt); }
+        if (!this.low && this.lowSeconds > 3) { this.low = true; this.onModeChange(); }
+        if (this.low && this.goodSeconds > 8 && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          this.low = false; this.lowSeconds = 0; this.goodSeconds = 0; this.onModeChange();
+        }
+      }
+    }
+
+    class Renderer {
+      constructor(canvas) {
+        this.canvas = canvas; this.ctx = canvas.getContext("2d", { alpha: false });
+        this.roadCache = null; this.spriteCache = new Map(); this.scale = 1;
+      }
+      rebuild(game) {
+        const { world } = game;
+        this.spriteCache.clear();
+        const cache = document.createElement("canvas");
+        cache.width = world.width; cache.height = world.height;
+        const ctx = cache.getContext("2d");
+        this.drawEnvironment(ctx, game, true);
+        this.roadCache = cache;
+      }
+      drawEnvironment(ctx, game, cachePass = false) {
+        const w = game.world, low = game.performance?.low;
+        const sky = ctx.createLinearGradient(0, 0, 0, w.height);
+        sky.addColorStop(0, "#82d7ee"); sky.addColorStop(.24, "#c7eef0"); sky.addColorStop(.25, "#2c914f");
+        ctx.fillStyle = sky; ctx.fillRect(0, 0, w.width, w.height);
+        this.drawGrass(ctx, 0, w.roadTop, w.width, low);
+        this.drawGrass(ctx, w.roadBottom, w.height - w.roadBottom, w.width, low);
+        const roadGradient = ctx.createLinearGradient(0, w.roadTop, 0, w.roadBottom);
+        roadGradient.addColorStop(0, "#34383b"); roadGradient.addColorStop(.5, "#22272a"); roadGradient.addColorStop(1, "#363a3d");
+        ctx.fillStyle = roadGradient; ctx.fillRect(0, w.roadTop, w.width, w.roadHeight);
+        if (!low) {
+          ctx.globalAlpha = .16;
+          for (let i = 0; i < 480; i++) {
+            const x = (i * 97.13) % w.width;
+            const y = w.roadTop + ((i * 53.7) % w.roadHeight);
+            const shade = i % 3 === 0 ? "#fff" : "#000";
+            ctx.fillStyle = shade; ctx.fillRect(x, y, 1 + i % 3, 1);
+          }
+          ctx.globalAlpha = 1;
+        }
+        for (let i = 0; i <= CONFIG.laneCount; i++) {
+          const y = w.roadTop + i * w.laneH;
+          if (i === 0 || i === CONFIG.laneCount) {
+            ctx.fillStyle = "#f4ca2e"; ctx.fillRect(0, y - w.laneH * .035, w.width, w.laneH * .07);
+            ctx.fillStyle = "#fff7b0"; ctx.fillRect(0, y - w.laneH * .011, w.width, w.laneH * .022);
+          } else {
+            ctx.strokeStyle = "#e9edefb8"; ctx.lineWidth = Math.max(2, w.laneH * .035);
+            ctx.setLineDash([w.laneH * .42, w.laneH * .3]);
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w.width, y); ctx.stroke();
+          }
+        }
+        ctx.setLineDash([]);
+        this.drawCurb(ctx, w.roadTop, w);
+        this.drawCurb(ctx, w.roadBottom, w);
+        if (!low) this.drawDecor(ctx, w);
+        if (!cachePass) this.drawLaneArrows(ctx, w);
+      }
+      drawGrass(ctx, y, h, width, low) {
+        const grad = ctx.createLinearGradient(0, y, 0, y + h);
+        grad.addColorStop(0, "#278f4a"); grad.addColorStop(.5, "#176c37"); grad.addColorStop(1, "#0f522b");
+        ctx.fillStyle = grad; ctx.fillRect(0, y, width, h);
+        if (!low) {
+          ctx.globalAlpha = .2;
+          ctx.strokeStyle = "#b6ef7f"; ctx.lineWidth = 1;
+          for (let x = 7; x < width; x += 17) {
+            const yy = y + ((x * 7) % Math.max(1, h));
+            ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 3, yy - 7); ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+      drawCurb(ctx, y, w) {
+        const size = w.laneH * .22;
+        for (let x = 0, i = 0; x < w.width; x += size, i++) {
+          ctx.fillStyle = i % 2 ? "#e8e8df" : "#18884a";
+          ctx.fillRect(x, y - size * .18, size + 1, size * .36);
+        }
+        ctx.fillStyle = "#0005"; ctx.fillRect(0, y + size * .18, w.width, size * .09);
+      }
+      drawDecor(ctx, w) {
+        const topY = w.roadTop * .66;
+        for (let x = w.width * .04; x < w.width; x += w.width * .115) {
+          ctx.fillStyle = "#0c4c29"; ctx.beginPath(); ctx.arc(x, topY, w.laneH * .2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#2aa959"; ctx.beginPath(); ctx.arc(x - 3, topY - 4, w.laneH * .14, 0, Math.PI * 2); ctx.fill();
+        }
+        const signWidth = w.laneH * 2.15;
+        const signX = Math.max(w.width * .12, signWidth / 2 + w.laneH * .12);
+        const signY = w.roadBottom + (w.height - w.roadBottom) * .46;
+        ctx.fillStyle = "#d9ded9"; ctx.fillRect(signX - 3, signY, 6, w.laneH * .48);
+        ctx.fillStyle = "#0d6a38"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.roundRect(signX - signWidth / 2, signY - w.laneH * .25, signWidth, w.laneH * .45, 6); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = `900 ${w.laneH * .15}px system-ui`;
+        ctx.fillText("VAI, CANARINHO!", signX, signY + w.laneH * .02);
+      }
+      drawLaneArrows(ctx, w) {
+        ctx.save(); ctx.globalAlpha = .07; ctx.fillStyle = "#fff";
+        for (let i = 0; i < CONFIG.laneCount; i++) {
+          const laneY = w.roadTop + (i + .5) * w.laneH;
+          const dir = i % 2 === 0 ? 1 : -1;
+          for (let x = w.width * .18; x < w.width; x += w.width * .32) {
+            ctx.save(); ctx.translate(x, laneY); ctx.scale(dir, 1);
+            ctx.beginPath(); ctx.moveTo(-w.laneH * .22, -w.laneH * .1); ctx.lineTo(0, -w.laneH * .1);
+            ctx.lineTo(0, -w.laneH * .2); ctx.lineTo(w.laneH * .25, 0);
+            ctx.lineTo(0, w.laneH * .2); ctx.lineTo(0, w.laneH * .1); ctx.lineTo(-w.laneH * .22, w.laneH * .1); ctx.closePath(); ctx.fill();
+            ctx.restore();
+          }
+        }
+        ctx.restore();
+      }
+      getVehicleSprite(vehicle, world, low) {
+        const key = `${vehicle.type}|${vehicle.color}|${Math.round(world.laneH)}|${low}`;
+        if (this.spriteCache.has(key)) return this.spriteCache.get(key);
+        const pad = world.laneH * .2;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(vehicle.width + pad * 2); canvas.height = Math.ceil(world.laneH + pad * 2);
+        const ctx = canvas.getContext("2d");
+        this.drawVehicleBody(ctx, vehicle, canvas.width / 2, canvas.height / 2, low);
+        const sprite = { canvas, pad };
+        this.spriteCache.set(key, sprite);
+        return sprite;
+      }
+      drawVehicleBody(ctx, vehicle, x, y, low) {
+        const w = vehicle.width, h = vehicle.height;
+        ctx.save(); ctx.translate(x, y);
+        ctx.fillStyle = "#0006"; ctx.beginPath(); ctx.ellipse(0, h * .42, w * .46, h * .2, 0, 0, Math.PI * 2); ctx.fill();
+        if (vehicle.type === "truck") {
+          const cab = w * .25;
+          const bodyGrad = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+          bodyGrad.addColorStop(0, "#fff"); bodyGrad.addColorStop(.13, vehicle.color); bodyGrad.addColorStop(1, "#17212a");
+          ctx.fillStyle = bodyGrad; ctx.beginPath(); ctx.roundRect(-w * .5, -h * .38, w * .68, h * .7, h * .08); ctx.fill();
+          ctx.fillStyle = vehicle.color; ctx.beginPath(); ctx.roundRect(w * .15, -h * .32, cab, h * .64, h * .1); ctx.fill();
+          ctx.fillStyle = "#8ed3e8"; ctx.beginPath(); ctx.roundRect(w * .19, -h * .25, cab * .62, h * .26, 4); ctx.fill();
+          ctx.fillStyle = "#ffffff2e"; ctx.fillRect(-w * .43, -h * .28, w * .5, h * .08);
+        } else {
+          const body = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+          body.addColorStop(0, "#ffffffaa"); body.addColorStop(.12, vehicle.color);
+          body.addColorStop(.68, vehicle.color); body.addColorStop(1, "#18232b");
+          ctx.fillStyle = body;
+          ctx.beginPath();
+          if (vehicle.type === "sport") {
+            ctx.moveTo(-w * .5, h * .15); ctx.quadraticCurveTo(-w * .45, -h * .22, -w * .22, -h * .25);
+            ctx.lineTo(w * .08, -h * .35); ctx.quadraticCurveTo(w * .33, -h * .28, w * .48, -.02);
+          } else {
+            ctx.moveTo(-w * .5, h * .15); ctx.quadraticCurveTo(-w * .46, -h * .27, -w * .22, -h * .3);
+            ctx.lineTo(w * .18, -h * (vehicle.type === "suv" ? .34 : .29)); ctx.quadraticCurveTo(w * .4, -h * .22, w * .5, .02);
+          }
+          ctx.lineTo(w * .48, h * .28); ctx.lineTo(-w * .46, h * .29); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = "#09141c"; ctx.lineWidth = Math.max(1.5, h * .025); ctx.stroke();
+          ctx.fillStyle = "#8ed3e8";
+          ctx.beginPath(); ctx.moveTo(-w * .2, -h * .25); ctx.lineTo(w * .12, -h * .28);
+          ctx.lineTo(w * .28, -h * .08); ctx.lineTo(-w * .28, -h * .08); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = "#294d60"; ctx.stroke();
+          ctx.fillStyle = "#ffffff35"; ctx.fillRect(-w * .37, -h * .17, w * .22, h * .045);
+        }
+        const wheelX = vehicle.type === "truck" ? [-w * .34, w * .02, w * .31] : [-w * .31, w * .31];
+        for (const wx of wheelX) {
+          ctx.fillStyle = "#101214"; ctx.beginPath(); ctx.ellipse(wx, h * .3, h * .14, h * .18, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#9da6aa"; ctx.beginPath(); ctx.arc(wx, h * .3, h * .07, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#30373a"; ctx.beginPath(); ctx.arc(wx, h * .3, h * .03, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = "#fff4a4"; ctx.beginPath(); ctx.ellipse(w * .47, h * .02, h * .04, h * .11, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#e82e36"; ctx.beginPath(); ctx.ellipse(-w * .47, h * .02, h * .035, h * .1, 0, 0, Math.PI * 2); ctx.fill();
+        if (!low) { ctx.strokeStyle = "#ffffff55"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-w * .36, -h * .19); ctx.lineTo(w * .18, -h * .28); ctx.stroke(); }
+        ctx.restore();
+      }
+      drawPlayer(ctx, player, world, stateTime, low) {
+        if (player.invulnerable > 0 && Math.floor(player.invulnerable * 12) % 2 === 0) return;
+        const walking = player.state === "walking";
+        const impact = player.state === "hit";
+        const celebrate = player.state === "celebrate";
+        const bob = walking ? Math.sin(stateTime * 15) * player.height * .035 :
+          celebrate ? Math.abs(Math.sin(stateTime * 18)) * -player.height * .12 :
+          Math.sin(stateTime * 3) * player.height * .012;
+        const step = walking ? Math.sin(stateTime * 15) : celebrate ? Math.sin(stateTime * 22) : 0;
+        const s = player.height / 84;
+        ctx.save(); ctx.translate(player.x, player.y + bob);
+        if (impact) ctx.rotate(Math.sin(stateTime * 35) * .14);
+        if (!low) {
+          ctx.fillStyle = "#0005"; ctx.beginPath(); ctx.ellipse(0, 37 * s, 24 * s, 8 * s, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        // Legs and shoes
+        ctx.strokeStyle = "#d8871d"; ctx.lineWidth = 7 * s; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(-10 * s, 20 * s); ctx.lineTo((-11 + step * 5) * s, 34 * s); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(10 * s, 20 * s); ctx.lineTo((11 - step * 5) * s, 34 * s); ctx.stroke();
+        ctx.fillStyle = "#e99d28";
+        ctx.beginPath(); ctx.ellipse((-15 + step * 5) * s, 36 * s, 10 * s, 5 * s, -.1, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse((15 - step * 5) * s, 36 * s, 10 * s, 5 * s, .1, 0, Math.PI * 2); ctx.fill();
+        // Blue shorts
+        const shorts = ctx.createLinearGradient(0, 7 * s, 0, 26 * s);
+        shorts.addColorStop(0, "#1768ba"); shorts.addColorStop(1, "#06346b");
+        ctx.fillStyle = shorts; ctx.beginPath(); ctx.roundRect(-23 * s, 7 * s, 46 * s, 20 * s, 7 * s); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.fillRect(-2 * s, 12 * s, 4 * s, 12 * s);
+        // Torso/shirt
+        const shirt = ctx.createRadialGradient(-9 * s, -4 * s, 2 * s, 0, 0, 34 * s);
+        shirt.addColorStop(0, "#fff26b"); shirt.addColorStop(.35, "#ffda1e"); shirt.addColorStop(1, "#d79c00");
+        ctx.fillStyle = shirt; ctx.strokeStyle = "#523d05"; ctx.lineWidth = 2.2 * s;
+        ctx.beginPath(); ctx.roundRect(-26 * s, -22 * s, 52 * s, 38 * s, 12 * s); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = "#078447"; ctx.lineWidth = 5 * s;
+        ctx.beginPath(); ctx.moveTo(-20 * s, -18 * s); ctx.lineTo(-11 * s, 12 * s);
+        ctx.moveTo(20 * s, -18 * s); ctx.lineTo(11 * s, 12 * s); ctx.stroke();
+        ctx.fillStyle = "#097f45"; ctx.beginPath(); ctx.arc(0, -1 * s, 6 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#ffe83d"; ctx.beginPath(); ctx.moveTo(0, -6 * s); ctx.lineTo(5 * s, -1 * s); ctx.lineTo(0, 4 * s); ctx.lineTo(-5 * s, -1 * s); ctx.closePath(); ctx.fill();
+        // Wings/arms
+        const armLift = celebrate ? -25 : impact ? 9 : -2 + step * 2;
+        ctx.strokeStyle = "#d89e05"; ctx.lineWidth = 12 * s;
+        ctx.beginPath(); ctx.moveTo(-22 * s, -12 * s); ctx.lineTo(-34 * s, armLift * s); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(22 * s, -12 * s); ctx.lineTo(34 * s, armLift * s); ctx.stroke();
+        // Head and cheek feathers
+        const head = ctx.createRadialGradient(-10 * s, -51 * s, 3 * s, 0, -43 * s, 37 * s);
+        head.addColorStop(0, "#fff379"); head.addColorStop(.45, "#ffd51c"); head.addColorStop(1, "#c98d00");
+        ctx.fillStyle = head; ctx.strokeStyle = "#533b00"; ctx.lineWidth = 2.4 * s;
+        ctx.beginPath(); ctx.ellipse(0, -43 * s, 31 * s, 29 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-22 * s, -59 * s); ctx.quadraticCurveTo(-9 * s, -79 * s, -3 * s, -67 * s);
+        ctx.quadraticCurveTo(5 * s, -82 * s, 10 * s, -65 * s); ctx.fill(); ctx.stroke();
+        // Feather accents
+        ctx.strokeStyle = "#e0a400"; ctx.lineWidth = 1.5 * s; ctx.globalAlpha = .75;
+        ctx.beginPath(); ctx.arc(-18 * s, -37 * s, 7 * s, .5, 2.3); ctx.stroke();
+        ctx.beginPath(); ctx.arc(18 * s, -37 * s, 7 * s, .8, 2.6); ctx.stroke(); ctx.globalAlpha = 1;
+        // Eyes
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.ellipse(-11 * s, -49 * s, 8 * s, 7 * s, -.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(11 * s, -49 * s, 8 * s, 7 * s, .15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        const look = impact ? 2 : 0;
+        ctx.fillStyle = "#17221a";
+        ctx.beginPath(); ctx.arc((-9 + look) * s, -48 * s, 3.4 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc((9 + look) * s, -48 * s, 3.4 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-10 * s, -50 * s, 1.2 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(8 * s, -50 * s, 1.2 * s, 0, Math.PI * 2); ctx.fill();
+        // Angry eyebrows
+        ctx.strokeStyle = "#382800"; ctx.lineWidth = 5 * s; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(-20 * s, -58 * s); ctx.lineTo(-5 * s, -53 * s); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(20 * s, -58 * s); ctx.lineTo(5 * s, -53 * s); ctx.stroke();
+        // Detailed beak
+        const beak = ctx.createLinearGradient(0, -45 * s, 0, -28 * s);
+        beak.addColorStop(0, "#ffb328"); beak.addColorStop(1, "#dc6b0c");
+        ctx.fillStyle = beak; ctx.strokeStyle = "#713408"; ctx.lineWidth = 1.8 * s;
+        ctx.beginPath(); ctx.moveTo(-10 * s, -43 * s); ctx.quadraticCurveTo(0, -48 * s, 15 * s, -39 * s);
+        ctx.lineTo(0, -31 * s); ctx.lineTo(-11 * s, -37 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-7 * s, -36 * s); ctx.lineTo(10 * s, -37 * s); ctx.stroke();
+        ctx.fillStyle = "#6d3210"; ctx.beginPath(); ctx.ellipse(3 * s, -41 * s, 1.3 * s, .8 * s, 0, 0, Math.PI * 2); ctx.fill();
+        if (!low) {
+          ctx.fillStyle = "#ffffff45"; ctx.beginPath(); ctx.ellipse(-9 * s, -55 * s, 7 * s, 3 * s, -.5, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+      }
+      draw(game) {
+        const ctx = this.ctx, w = game.world;
+        ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+        ctx.clearRect(0, 0, w.width, w.height);
+        const shake = game.cameraShake > 0 ? game.cameraShake * w.laneH * .08 : 0;
+        ctx.save();
+        if (shake) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+        if (this.roadCache) ctx.drawImage(this.roadCache, 0, 0);
+        this.drawLaneArrows(ctx, w);
+        for (const lane of game.lanes) {
+          for (const vehicle of lane.vehicles) {
+            const sprite = this.getVehicleSprite(vehicle, w, game.performance.low);
+            ctx.save(); ctx.translate(vehicle.x, lane.y(w));
+            if (lane.direction < 0) ctx.scale(-1, 1);
+            ctx.drawImage(sprite.canvas, -sprite.canvas.width / 2, -sprite.canvas.height / 2);
+            ctx.restore();
+          }
+        }
+        this.drawPlayer(ctx, game.player, w, game.elapsed, game.performance.low);
+        game.particles.draw(ctx);
+        if (game.debug && game.showHitboxes) this.drawHitboxes(ctx, game);
+        if (game.hitFlash > 0) {
+          ctx.globalAlpha = game.hitFlash * .24; ctx.fillStyle = "#ff2038"; ctx.fillRect(0, 0, w.width, w.height); ctx.globalAlpha = 1;
+        }
+        ctx.restore();
+      }
+      drawHitboxes(ctx, game) {
+        ctx.save(); ctx.lineWidth = 2 / this.scale;
+        const p = game.player.hitbox; ctx.strokeStyle = "#40ff67"; ctx.strokeRect(p.x, p.y, p.w, p.h);
+        ctx.strokeStyle = "#ff3158";
+        for (const lane of game.lanes) for (const vehicle of lane.vehicles) {
+          const r = lane.getRect(vehicle, game.world); ctx.strokeRect(r.x, r.y, r.w, r.h);
+        }
+        ctx.restore();
+      }
+    }
+
+    class Game {
+      constructor() {
+        this.shell = $("#game-shell"); this.canvas = $("#game-canvas");
+        this.renderer = new Renderer(this.canvas);
+        this.audio = new AudioManager($("#sound-button"));
+        this.particles = new ParticleSystem();
+        this.debug = new URLSearchParams(location.search).get("debug") === "1";
+        const requestedDuration = Number(new URLSearchParams(location.search).get("duration"));
+        this.duration = this.debug && requestedDuration > 0 ? clamp(requestedDuration, 1, CONFIG.duration) : CONFIG.duration;
+        this.difficulty = "normal";
+        this.state = "ready"; this.previousActiveState = "playing";
+        this.score = 0; this.best = this.loadBest(); this.timeLeft = this.duration;
+        this.elapsed = 0; this.lastTimestamp = 0; this.hitTimer = 0; this.celebrationTimer = 0;
+        this.cameraShake = 0; this.hitFlash = 0; this.toastTimer = 0;
+        this.fairnessTimer = 0; this.fairnessActive = false; this.fairnessElapsed = 0;
+        this.fairnessClearDelay = 0; this.fairnessDuration = 0; this.fairnessAnnounced = false;
+        this.showHitboxes = false; this.world = null; this.lanes = [];
+        this.player = new Player();
+        this.performance = new PerformanceManager(() => this.resizeCanvas(true));
+        this.input = new InputManager(this, this.shell);
+        this.bindUI(); this.resizeCanvas(false); this.resetGame(true);
+        this.updateDeviceHint(this.input.touch ? "touch" : this.isLikelyTV() ? "tv" : "computer");
+        if (this.debug) this.enableDebug();
+        this.installLifecycleHandlers();
+        requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+      }
+      isLikelyTV() {
+        return /smart-tv|smarttv|googletv|android tv|hbbtv|netcast|web0s|tizen/i.test(navigator.userAgent);
+      }
+      createWorld(width, height) {
+        const safeTop = height * (height > width ? .142 : .145);
+        const safeBottom = height * (height > width ? .14 : .145);
+        const roadTop = safeTop, roadBottom = height - safeBottom;
+        const laneH = (roadBottom - roadTop) / CONFIG.laneCount;
+        const playerHalf = laneH * 1.05 * .4;
+        return {
+          width, height, roadTop, roadBottom, roadHeight: roadBottom - roadTop, laneH,
+          topLimit: Math.max(playerHalf, roadTop - safeTop * .34),
+          bottomLimit: Math.min(height - playerHalf, roadBottom + safeBottom * .34),
+          topGoal: roadTop - playerHalf * .95,
+          bottomSafeCenter: Math.min(height - playerHalf - 3, roadBottom + safeBottom * .46)
+        };
+      }
+      bindUI() {
+        $("#start-button").addEventListener("click", () => this.startGame());
+        $("#resume-button").addEventListener("click", () => this.resumeGame());
+        $("#restart-button").addEventListener("click", () => this.resetGame(false));
+        document.querySelectorAll(".difficulty-option").forEach((button) => {
+          button.addEventListener("click", () => this.setDifficulty(button.dataset.difficulty));
+        });
+      }
+      installLifecycleHandlers() {
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) this.pauseGame("visibility");
+        });
+        window.addEventListener("blur", () => this.pauseGame("blur"));
+        window.addEventListener("focus", () => {
+          this.lastTimestamp = performance.now();
+          if (this.state === "paused") this.showToast("Pressione Enter para continuar");
+        });
+        window.addEventListener("resize", () => this.resizeCanvas(false), { passive: true });
+        window.addEventListener("orientationchange", () => setTimeout(() => this.resizeCanvas(false), 80));
+      }
+      transition(next) {
+        const allowed = {
+          ready: ["playing"], playing: ["hit", "celebrating", "paused", "gameOver"],
+          hit: ["playing", "paused", "gameOver"], celebrating: ["playing", "paused", "gameOver"],
+          paused: ["playing", "hit", "celebrating", "gameOver"], gameOver: ["playing"]
+        };
+        if (next !== this.state && !allowed[this.state]?.includes(next)) return false;
+        this.state = next; this.updateOverlays(); return true;
+      }
+      startGame() {
+        if (this.state !== "ready") return;
+        this.audio.play("start", () => this.showToast("Clique no alto-falante para liberar o som"));
+        this.transition("playing");
+        this.player.state = "idle"; this.lastTimestamp = performance.now(); this.input.clear();
+        this.showToast(`Modo ${this.difficultySettings.label} · Atravesse as 10 pistas!`);
+      }
+      pauseGame() {
+        if (!["playing", "hit", "celebrating"].includes(this.state)) return;
+        this.previousActiveState = this.state;
+        this.input.clear(); this.audio.stopWalking(); this.transition("paused");
+      }
+      resumeGame() {
+        if (this.state !== "paused") return;
+        const next = ["playing", "hit", "celebrating"].includes(this.previousActiveState) ? this.previousActiveState : "playing";
+        this.audio.play("confirm"); this.transition(next); this.lastTimestamp = performance.now();
+      }
+      finishGame() {
+        if (this.state === "gameOver") return;
+        this.timeLeft = 0; this.input.clear(); this.audio.stopWalking(); this.player.state = "idle";
+        this.best = Math.max(this.best, this.score);
+        this.saveBest();
+        this.updateHud();
+        this.audio.play("over"); this.transition("gameOver");
+        $("#final-score").textContent = this.score; $("#final-best").textContent = this.best;
+        requestAnimationFrame(() => $("#restart-button").focus());
+      }
+      resetGame(initial = false) {
+        this.score = 0; this.timeLeft = this.duration; this.elapsed = 0;
+        this.hitTimer = this.celebrationTimer = this.cameraShake = this.hitFlash = 0;
+        this.fairnessTimer = this.difficultySettings.fairnessInterval;
+        this.fairnessActive = false; this.fairnessElapsed = 0;
+        this.fairnessClearDelay = 0; this.fairnessDuration = 0; this.fairnessAnnounced = false;
+        this.input.clear(); this.audio.stopWalking(); this.particles.reset(); this.player.reset(this.world);
+        this.lanes = Array.from({ length: CONFIG.laneCount }, (_, i) => new Lane(i));
+        this.lanes.forEach((lane) => lane.setup(this.world, this.difficultySettings));
+        this.updateHud();
+        if (initial) {
+          this.state = "ready"; this.updateOverlays();
+          requestAnimationFrame(() => $("#start-button").focus());
+        } else {
+          this.state = "gameOver";
+          this.transition("playing"); this.audio.play("start");
+          this.lastTimestamp = performance.now(); this.showToast("Nova partida!");
+        }
+      }
+      handleConfirm() {
+        if (this.state === "ready") this.startGame();
+        else if (this.state === "paused") this.resumeGame();
+        else if (this.state === "gameOver") this.resetGame(false);
+      }
+      handleBack() {
+        if (this.state === "paused") this.resumeGame();
+        else if (["playing", "hit", "celebrating"].includes(this.state)) this.pauseGame("back");
+      }
+      updateOverlays() {
+        $("#ready-overlay").hidden = this.state !== "ready";
+        $("#pause-overlay").hidden = this.state !== "paused";
+        $("#gameover-overlay").hidden = this.state !== "gameOver";
+        if (this.state === "paused") requestAnimationFrame(() => $("#resume-button").focus());
+      }
+      updateDeviceHint(type) {
+        const hints = {
+          tv: ["Controle remoto", "Use as setas do controle remoto"],
+          computer: ["Teclado", "Use ↑, ↓ ou W e S"],
+          touch: ["Toque", "Use os botões na tela"],
+          gamepad: ["Gamepad", "Use o direcional ou analógico"]
+        };
+        const [label, instruction] = hints[type] || hints.computer;
+        $("#device-label").textContent = label; $("#device-instruction").textContent = instruction;
+      }
+      get difficultySettings() {
+        return CONFIG.difficulties[this.difficulty] || CONFIG.difficulties.easy;
+      }
+      setDifficulty(id) {
+        if (this.state !== "ready" || !CONFIG.difficulties[id]) return;
+        this.difficulty = id;
+        document.querySelectorAll(".difficulty-option").forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.difficulty === id));
+        });
+        $("#difficulty-description").textContent = this.difficultySettings.description;
+        this.lanes.forEach((lane) => lane.setup(this.world, this.difficultySettings));
+        this.fairnessTimer = this.difficultySettings.fairnessInterval;
+        this.fairnessActive = false;
+      }
+      cycleDifficulty(direction) {
+        if (this.state !== "ready") return;
+        const ids = Object.keys(CONFIG.difficulties);
+        const current = Math.max(0, ids.indexOf(this.difficulty));
+        const next = (current + direction + ids.length) % ids.length;
+        this.setDifficulty(ids[next]);
+      }
+      startFairnessWindow() {
+        this.fairnessActive = true;
+        this.fairnessElapsed = 0;
+        this.fairnessAnnounced = false;
+        const corridorLeft = this.player.x - this.player.width * .42;
+        const corridorRight = this.player.x + this.player.width * .42;
+        let clearDelay = .2;
+        for (const lane of this.lanes) {
+          for (const vehicle of lane.vehicles) {
+            const half = vehicle.width * .46;
+            const approaching = lane.direction > 0
+              ? vehicle.x + half < corridorLeft
+              : vehicle.x - half > corridorRight;
+            vehicle.fairnessHold = approaching;
+            if (!approaching) {
+              const distance = lane.direction > 0
+                ? corridorRight + half - vehicle.x
+                : vehicle.x + half - corridorLeft;
+              clearDelay = Math.max(clearDelay, Math.max(0, distance) / vehicle.speed);
+            }
+          }
+        }
+        this.fairnessClearDelay = clearDelay + .18;
+        this.fairnessDuration = this.fairnessClearDelay + 4.15;
+        this.showToast("O trânsito vai abrir...");
+      }
+      updateFairnessWindow(dt) {
+        if (!this.fairnessActive) {
+          this.fairnessTimer -= dt;
+          if (this.fairnessTimer <= 0) this.startFairnessWindow();
+          return;
+        }
+        this.fairnessElapsed += dt;
+        if (!this.fairnessAnnounced && this.fairnessElapsed >= this.fairnessClearDelay) {
+          this.fairnessAnnounced = true;
+          this.showToast("CORREDOR LIVRE! Atravesse agora!");
+        }
+        if (this.fairnessElapsed >= this.fairnessDuration) {
+          this.fairnessActive = false;
+          this.fairnessTimer = this.difficultySettings.fairnessInterval;
+          for (const lane of this.lanes) {
+            for (const vehicle of lane.vehicles) vehicle.fairnessHold = false;
+          }
+        }
+      }
+      resizeCanvas(force = false) {
+        const availableW = window.innerWidth, availableH = window.innerHeight;
+        const orientation = availableH > availableW ? "portrait" : "landscape";
+        const logical = CONFIG.layouts[orientation];
+        const oldWorld = this.world;
+        const oldProgress = oldWorld ? this.player.progress(oldWorld) : null;
+        const scale = Math.min(availableW / logical.width, availableH / logical.height);
+        const cssW = Math.max(1, Math.floor(logical.width * scale));
+        const cssH = Math.max(1, Math.floor(logical.height * scale));
+        this.shell.style.width = `${cssW}px`; this.shell.style.height = `${cssH}px`;
+        let dprCap = this.performance?.low ? 1 : 2;
+        if (this.isLikelyTV()) dprCap = Math.min(dprCap, 1.5);
+        const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+        const baseScale = cssW / logical.width;
+        const pixelScale = Math.min(
+          baseScale * dpr,
+          CONFIG.maxInternalWidth / logical.width,
+          CONFIG.maxInternalHeight / logical.height
+        );
+        const internalW = Math.max(1, Math.round(logical.width * pixelScale));
+        const internalH = Math.max(1, Math.round(logical.height * pixelScale));
+        if (force || this.canvas.width !== internalW || this.canvas.height !== internalH) {
+          this.canvas.width = internalW; this.canvas.height = internalH;
+        }
+        this.renderer.scale = internalW / logical.width;
+        this.world = this.createWorld(logical.width, logical.height);
+        if (oldWorld && this.player) {
+          this.player.configure(this.world, oldProgress);
+          for (const lane of this.lanes) lane.resize(oldWorld, this.world, this.difficultySettings);
+          if (this.fairnessActive) this.startFairnessWindow();
+        } else if (this.player) this.player.configure(this.world);
+        this.renderer.rebuild(this);
+      }
+      update(dt) {
+        this.elapsed += dt; this.input.updateGamepad(); this.performance.sample(dt);
+        if (!["playing", "hit", "celebrating"].includes(this.state)) return;
+        this.timeLeft = Math.max(0, this.timeLeft - dt);
+        if (this.timeLeft <= 0) { this.finishGame(); return; }
+        this.player.animTime += dt;
+        this.player.invulnerable = Math.max(0, this.player.invulnerable - dt);
+        this.cameraShake = Math.max(0, this.cameraShake - dt * 4);
+        this.hitFlash = Math.max(0, this.hitFlash - dt * 4.5);
+        this.updateFairnessWindow(dt);
+        this.particles.update(dt, this.performance.low);
+        for (const lane of this.lanes) lane.update(dt, this.world, this.difficultySettings, this.fairnessActive);
+        if (this.state === "playing") this.updatePlayer(dt);
+        else if (this.state === "hit") {
+          this.hitTimer -= dt;
+          if (this.hitTimer <= 0) { this.player.state = "idle"; this.transition("playing"); }
+        } else if (this.state === "celebrating") {
+          this.celebrationTimer -= dt;
+          if (this.celebrationTimer <= 0) {
+            this.player.y = this.world.bottomSafeCenter; this.player.state = "idle"; this.transition("playing");
+          }
+        }
+        if (this.state === "playing") this.checkCollisions();
+        if (this.toastTimer > 0) {
+          this.toastTimer -= dt;
+          if (this.toastTimer <= 0) $("#toast").classList.remove("show");
+        }
+        this.updateHud();
+      }
+      updatePlayer(dt) {
+        const movement = this.input.movement();
+        const speed = this.world.laneH * CONFIG.playerSpeedLanes;
+        this.audio.updateWalking(!!movement, dt);
+        this.player.y = clamp(this.player.y + movement * speed * dt, this.world.topLimit, this.world.bottomLimit);
+        this.player.state = movement ? "walking" : "idle";
+        if (this.player.y <= this.world.topGoal) this.scorePoint();
+      }
+      scorePoint() {
+        if (this.state !== "playing") return;
+        this.audio.stopWalking();
+        this.score += 1;
+        if (this.score > this.best) this.best = this.score;
+        this.player.state = "celebrate"; this.celebrationTimer = CONFIG.celebrationDuration;
+        this.particles.emit(this.player.x, this.player.y, 28, ["#ffe239", "#fff", "#19a85b", "#2d73d2"], "confetti", this.performance.low);
+        this.audio.play("score"); this.transition("celebrating"); this.showToast("+1 PONTO!");
+        this.updateHud();
+      }
+      checkCollisions() {
+        if (this.player.invulnerable > 0) return;
+        const playerBox = this.player.hitbox;
+        for (const lane of this.lanes) {
+          for (const vehicle of lane.vehicles) {
+            if (rectsOverlap(playerBox, lane.getRect(vehicle, this.world))) {
+              this.handleCollision();
+              return;
+            }
+          }
+        }
+      }
+      handleCollision() {
+        if (this.state !== "playing" || this.player.invulnerable > 0) return;
+        this.audio.stopWalking();
+        const exactRetreat = this.world.laneH * 2;
+        const desired = this.player.y + exactRetreat;
+        this.player.y = desired <= this.world.bottomLimit ? desired : this.world.bottomSafeCenter;
+        this.resolvePostHitOverlap();
+        this.player.invulnerable = CONFIG.invulnerability;
+        this.player.state = "hit"; this.hitTimer = CONFIG.hitDuration;
+        this.cameraShake = 1; this.hitFlash = 1;
+        this.particles.emit(this.player.x, this.player.y, 22, ["#ff253d", "#ffcf2e", "#fff"], "spark", this.performance.low);
+        this.audio.play("hit"); this.transition("hit"); this.showToast("Cuidado! Recuo de 2 pistas");
+      }
+      resolvePostHitOverlap() {
+        const maxAttempts = 6;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          let overlap = false;
+          for (const lane of this.lanes) for (const vehicle of lane.vehicles) {
+            if (rectsOverlap(this.player.hitbox, lane.getRect(vehicle, this.world))) overlap = true;
+          }
+          if (!overlap) return;
+          this.player.y = Math.min(this.world.bottomSafeCenter, this.player.y + this.world.laneH * .1);
+        }
+        if ([...this.lanes].some((lane) => lane.vehicles.some((vehicle) =>
+          rectsOverlap(this.player.hitbox, lane.getRect(vehicle, this.world))))) {
+          this.player.y = this.world.bottomSafeCenter;
+        }
+      }
+      updateHud() {
+        $("#score-value").textContent = this.score;
+        $("#time-value").textContent = formatTime(this.timeLeft);
+        $("#best-value").textContent = Math.max(this.best, this.score);
+      }
+      showToast(message) {
+        const toast = $("#toast"); toast.textContent = message; toast.classList.add("show"); this.toastTimer = 1.35;
+      }
+      loadBest() {
+        try { return Math.max(0, Number(localStorage.getItem("travessia-canarinho-best")) || 0); } catch (_) { return 0; }
+      }
+      saveBest() {
+        try { localStorage.setItem("travessia-canarinho-best", String(this.best)); } catch (_) {}
+      }
+      gameLoop(timestamp) {
+        if (!this.lastTimestamp) this.lastTimestamp = timestamp;
+        const dt = clamp((timestamp - this.lastTimestamp) / 1000, 0, CONFIG.maxDelta);
+        this.lastTimestamp = timestamp;
+        this.update(dt); this.renderer.draw(this);
+        if (this.debug) this.updateDebug();
+        requestAnimationFrame((next) => this.gameLoop(next));
+      }
+      enableDebug() {
+        $("#debug-panel").hidden = false;
+        $("#debug-hitboxes").addEventListener("change", (event) => { this.showHitboxes = event.target.checked; });
+        $("#debug-middle").addEventListener("click", () => {
+          this.player.y = this.world.roadTop + this.world.laneH * 3.5;
+        });
+        $("#debug-collision").addEventListener("click", () => this.handleCollision());
+        $("#debug-score").addEventListener("click", () => this.scorePoint());
+        $("#debug-fairness").addEventListener("click", () => this.startFairnessWindow());
+        $("#debug-finish").addEventListener("click", () => this.finishGame());
+        $("#debug-reset").addEventListener("click", () => this.resetGame(false));
+        window.__gameTest = Object.freeze({
+          snapshot: () => this.snapshot(),
+          setPlayerY: (y) => { this.player.y = clamp(Number(y), this.world.topLimit, this.world.bottomLimit); },
+          setPlayerProgress: (progress) => { this.player.y = lerp(this.world.topLimit, this.world.bottomLimit, clamp(Number(progress), 0, 1)); },
+          forceCollision: () => this.handleCollision(),
+          forceScore: () => this.scorePoint(),
+          setTimeLeft: (seconds) => { this.timeLeft = clamp(Number(seconds), 0, this.duration); },
+          pause: () => this.pauseGame("debug"),
+          resume: () => this.resumeGame(),
+          finish: () => this.finishGame(),
+          reset: () => this.resetGame(false)
+        });
+      }
+      snapshot() {
+        return {
+          state: this.state, difficulty: this.difficulty, score: this.score, best: this.best, timeLeft: this.timeLeft,
+          player: { x: this.player.x, y: this.player.y, hitbox: this.player.hitbox, invulnerable: this.player.invulnerable },
+          world: { ...this.world }, vehicles: this.lanes.reduce((sum, lane) => sum + lane.vehicles.length, 0),
+          lanes: this.lanes.map((lane) => ({ direction: lane.direction, count: lane.vehicles.length })),
+          particles: this.particles.items.length, orientation: this.world.height > this.world.width ? "portrait" : "landscape",
+          canvas: { css: [this.canvas.clientWidth, this.canvas.clientHeight], internal: [this.canvas.width, this.canvas.height] },
+          externalResources: [...document.querySelectorAll("[src],[href]")].map((node) => node.src || node.href).filter((url) => /^https?:/i.test(url))
+        };
+      }
+      updateDebug() {
+        const snap = this.snapshot();
+        const css = snap.canvas.css, internal = snap.canvas.internal;
+        $("#debug-text").textContent =
+`FPS: ${this.performance.current.toFixed(1)}
+Média: ${this.performance.average.toFixed(1)}
+Desempenho: ${this.performance.low ? "reduzido" : "normal"}
+CSS: ${css[0]} × ${css[1]}
+Interna: ${internal[0]} × ${internal[1]}
+Lógica: ${this.world.width} × ${this.world.height}
+DPR: ${(window.devicePixelRatio || 1).toFixed(2)}
+Orientação: ${snap.orientation}
+Estado: ${this.state}
+Dificuldade: ${this.difficultySettings.label}
+Veículos/pista: máx. ${this.difficultySettings.maxVehicles}
+Janela mínima: ${(1 / CONFIG.playerSpeedLanes + this.difficultySettings.reactionTime).toFixed(2)}s
+Corredor: ${this.fairnessActive ? (this.fairnessAnnounced ? "livre" : "abrindo") : `em ${Math.max(0, this.fairnessTimer).toFixed(1)}s`}
+Tempo preciso: ${this.timeLeft.toFixed(3)}
+Jogador Y: ${this.player.y.toFixed(2)}
+Altura da pista: ${this.world.laneH.toFixed(2)}
+Invulnerável: ${this.player.invulnerable.toFixed(2)}
+Veículos: ${snap.vehicles}
+Por pista: ${snap.lanes.map((lane) => lane.count).join("/")}
+Partículas: ${snap.particles}
+Som: ${this.audio.enabled ? "ligado" : "desligado"}
+Contexto de áudio: ${this.audio.context?.state || "aguardando interação"}
+Passos sonoros: ${this.audio.walkStepCount}
+Última tecla: ${this.input.lastKey}
+Gamepad: ${this.input.gamepadName}
+Touch: ${this.input.touch ? "sim" : "não"}`;
+      }
+    }
+
+    window.initializeGame = () => new Game();
+    window.addEventListener("DOMContentLoaded", () => {
+      window.travessiaGame = window.initializeGame();
+    }, { once: true });
+  })();
+  </script>
+</body>
+</html>
