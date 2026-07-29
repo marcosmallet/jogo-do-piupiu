@@ -647,6 +647,7 @@
           const action = this.classify(event);
           if (!action) return;
           if (this.touch && this.game.shouldPreferTVRemote()) this.activateTVMode();
+          if (this.tv && action === "confirm") this.game.tryPointerLock();
           if (this.game.audio.enabled) this.game.audio.unlock();
           this.lastKey = `${event.key || "?"} / ${event.code || "?"} / ${event.keyCode || 0}`;
           event.preventDefault();
@@ -731,6 +732,9 @@
         this.gamepadMove = dpadUp ? -1 : dpadDown ? 1 : vertical;
         const current = active.buttons.map((button) => !!button.pressed);
         const justPressed = (index) => current[index] && !this.gamepadPrevious[index];
+        if (this.tv && (justPressed(0) || justPressed(9))) {
+          this.game.tryPointerLock();
+        }
         if (this.game.audio.enabled && current.some((pressed, index) => pressed && !this.gamepadPrevious[index])) {
           this.game.audio.unlock();
         }
@@ -1225,6 +1229,7 @@
         this.duration = this.debug && requestedDuration > 0 ? clamp(requestedDuration, 1, CONFIG.duration) : CONFIG.duration;
         this.difficulty = "normal";
         this.state = "ready"; this.previousActiveState = "playing";
+        this.pointerLockStatus = this.tvMode ? "aguardando interação" : "não necessário";
         this.score = 0; this.best = this.loadBest(); this.timeLeft = this.duration;
         this.elapsed = 0; this.lastTimestamp = 0; this.hitTimer = 0; this.celebrationTimer = 0;
         this.cameraShake = 0; this.hitFlash = 0; this.toastTimer = 0;
@@ -1235,6 +1240,7 @@
         this.performance = new PerformanceManager(() => this.resizeCanvas(true));
         this.input = new InputManager(this, this.shell);
         this.bindUI(); this.resizeCanvas(false); this.resetGame(true);
+        this.installPointerLockHandlers();
         this.updateDeviceHint(this.input.touch ? "touch" : this.tvMode ? "tv" : "computer");
         if (this.debug) this.enableDebug();
         this.installLifecycleHandlers();
@@ -1252,6 +1258,41 @@
         const hasFinePointer = matchMedia("(any-hover: hover) and (any-pointer: fine)").matches;
         return landscape && !hasFinePointer;
       }
+      getPointerLockElement() {
+        return document.pointerLockElement || document.webkitPointerLockElement ||
+          document.mozPointerLockElement || null;
+      }
+      tryPointerLock() {
+        if (!this.tvMode || this.getPointerLockElement() === this.shell) return;
+        const request = this.shell.requestPointerLock || this.shell.webkitRequestPointerLock ||
+          this.shell.mozRequestPointerLock;
+        if (typeof request !== "function") {
+          this.pointerLockStatus = "indisponível";
+          return;
+        }
+        try {
+          this.pointerLockStatus = "solicitando";
+          const result = request.call(this.shell);
+          if (result && typeof result.catch === "function") {
+            result.catch(() => {
+              if (this.getPointerLockElement() !== this.shell) this.pointerLockStatus = "recusado";
+            });
+          }
+        } catch (_) {
+          this.pointerLockStatus = "recusado";
+        }
+      }
+      installPointerLockHandlers() {
+        const updateStatus = () => {
+          this.pointerLockStatus = this.getPointerLockElement() === this.shell ? "ativo" : "liberado";
+        };
+        ["pointerlockchange", "webkitpointerlockchange", "mozpointerlockchange"].forEach((type) =>
+          document.addEventListener(type, updateStatus)
+        );
+        ["pointerlockerror", "webkitpointerlockerror", "mozpointerlockerror"].forEach((type) =>
+          document.addEventListener(type, () => { this.pointerLockStatus = "recusado"; })
+        );
+      }
       createWorld(width, height) {
         const safeTop = height * (height > width ? .142 : .145);
         const safeBottom = height * (height > width ? .14 : .145);
@@ -1267,9 +1308,15 @@
         };
       }
       bindUI() {
-        $("#start-button").addEventListener("click", () => this.startGame());
-        $("#resume-button").addEventListener("click", () => this.resumeGame());
-        $("#restart-button").addEventListener("click", () => this.resetGame(false));
+        $("#start-button").addEventListener("click", () => {
+          this.tryPointerLock(); this.startGame();
+        });
+        $("#resume-button").addEventListener("click", () => {
+          this.tryPointerLock(); this.resumeGame();
+        });
+        $("#restart-button").addEventListener("click", () => {
+          this.tryPointerLock(); this.resetGame(false);
+        });
         document.querySelectorAll(".difficulty-option").forEach((button) => {
           button.addEventListener("click", () => this.setDifficulty(button.dataset.difficulty));
         });
@@ -1646,6 +1693,7 @@ Passos sonoros: ${this.audio.walkStepCount}
 Última tecla: ${this.input.lastKey}
 Gamepad: ${this.input.gamepadName}
 TV: ${this.input.tv ? "sim" : "não"}
+Bloqueio do ponteiro: ${this.pointerLockStatus}
 Touch: ${this.input.touch ? "sim" : "não"}`;
       }
     }
