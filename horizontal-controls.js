@@ -3,6 +3,9 @@
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const ACTIVE = new Set(["playing"]);
+  // Independent horizontal tuning contract. Keep named so lateral agency can be
+  // measured/rebalanced without silently coupling it to vertical crossing speed.
+  const HORIZONTAL_SPEED_LANES = 3.15;
 
   function install(game) {
     if (!game?.input || game.__horizontalMovementInstalled) return;
@@ -82,7 +85,7 @@
       if (!ACTIVE.has(game.state)) return;
       const horizontal = input.horizontalMovement();
       if (!horizontal) return;
-      const speed = game.world.laneH * 3.15;
+      const speed = game.world.laneH * HORIZONTAL_SPEED_LANES;
       const margin = Math.max(game.player.width * .55, game.world.laneH * .2);
       game.player.x = clamp(game.player.x + horizontal * speed * dt, margin, game.world.width - margin);
       if (!vertical) game.audio?.updateWalking(true, dt);
@@ -141,6 +144,7 @@
       get playerX() { return game.player.x; },
       get minX() { return Math.max(game.player.width * .55, game.world.laneH * .2); },
       get maxX() { return game.world.width - this.minX; },
+      get speedLanes() { return HORIZONTAL_SPEED_LANES; },
       move(direction, dt = .25) {
         input.left = direction < 0;
         input.right = direction > 0;
