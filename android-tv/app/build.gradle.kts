@@ -17,8 +17,8 @@ android {
         applicationId = "br.com.travessiadocanarinho.tv"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     sourceSets {
@@ -58,6 +58,13 @@ val packageDebugApk by tasks.registering(Copy::class) {
     from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
     into(rootProject.layout.projectDirectory.dir("dist"))
     rename { "travessia-canarinho-tv-debug.apk" }
+}
+
+val packageReleaseApk by tasks.registering(Copy::class) {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.file("outputs/apk/release/app-release-unsigned.apk"))
+    into(rootProject.layout.projectDirectory.dir("dist"))
+    rename { "travessia-canarinho-tv-release-unsigned.apk" }
 }
 
 dependencies {

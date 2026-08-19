@@ -982,7 +982,7 @@
     class Renderer {
       constructor(canvas) {
         this.canvas = canvas; this.ctx = canvas.getContext("2d", { alpha: false });
-        this.roadCache = null; this.spriteCache = new Map(); this.scale = 1;
+        this.roadCache = null; this.spriteCache = new Map(); this.scale = 1; this.drawCount = 0;
       }
       rebuild(game) {
         const { world } = game;
@@ -1219,6 +1219,7 @@
         ctx.restore();
       }
       draw(game) {
+        this.drawCount += 1;
         const ctx = this.ctx, w = game.world;
         ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
         ctx.clearRect(0, 0, w.width, w.height);
@@ -1278,6 +1279,7 @@
         this.fairnessTimer = 0; this.fairnessActive = false; this.fairnessElapsed = 0;
         this.fairnessClearDelay = 0; this.fairnessDuration = 0; this.fairnessAnnounced = false;
         this.showHitboxes = false; this.world = null; this.lanes = [];
+        this.needsRender = true; this.frameHandle = 0; this.idleTimer = 0;
         this.player = new Player();
         this.performance = new PerformanceManager(() => this.resizeCanvas(true));
         this.input = new InputManager(this, this.shell);
@@ -1289,13 +1291,38 @@
         this.updateDeviceHint(this.input.touch ? "touch" : this.tvMode ? "tv" : "computer");
         if (this.debug) this.enableDebug();
         this.installLifecycleHandlers();
-        requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+        this.requestNextFrame();
       }
       isLikelyTV() {
         const params = new URLSearchParams(location.search);
         if (params.get("tv") === "1") return true;
         const userAgent = navigator.userAgent || "";
         return /smart[- ]?tv|google ?tv|android tv|sdk_google_atv|\batv\b|hbbtv|netcast|web0s|webos|tizen|aft[bmsty]|fire tv|bravia|viera|aquos|dtv|roku|crkey|chromecast|vidaa|hisense|philips tv|opera tv|mibox|mi box|shield android|nexus player|adt-1|television/i.test(userAgent);
+      }
+      isActiveState() {
+        return ["playing", "hit", "celebrating"].includes(this.state);
+      }
+      requestNextFrame(delay = 0) {
+        if (this.frameHandle || this.idleTimer) return;
+        const schedule = () => {
+          this.idleTimer = 0;
+          if (!this.frameHandle) {
+            this.frameHandle = requestAnimationFrame((timestamp) => this.gameLoop(timestamp));
+          }
+        };
+        if (delay > 0) this.idleTimer = window.setTimeout(schedule, delay);
+        else schedule();
+      }
+      wakeLoop() {
+        if (this.idleTimer) {
+          clearTimeout(this.idleTimer);
+          this.idleTimer = 0;
+        }
+        this.requestNextFrame();
+      }
+      markDirty() {
+        this.needsRender = true;
+        this.wakeLoop();
       }
       shouldPreferTVRemote() {
         if (this.tvMode) return true;
@@ -1346,17 +1373,18 @@
         if (!this.androidTvApp || !window.AndroidTvHost ||
             typeof window.AndroidTvHost.setPlaying !== "function") return;
         try {
-          window.AndroidTvHost.setPlaying(["playing", "hit", "celebrating"].includes(this.state));
+          window.AndroidTvHost.setPlaying(this.isActiveState());
         } catch (_) {}
       }
       handleAndroidTvLifecycle(event) {
         this.input.clear();
         this.audio.stopWalking();
-        if (event === "pause" && ["playing", "hit", "celebrating"].includes(this.state)) {
+        if (event === "pause" && this.isActiveState()) {
           this.pauseGame("sistema");
         } else if (event === "resume" && this.state === "paused") {
           this.lastTimestamp = performance.now();
           this.showToast("Pressione Enter para continuar");
+          this.wakeLoop();
         }
         this.notifyAndroidTvState();
         return this.state;
@@ -1392,11 +1420,13 @@
       installLifecycleHandlers() {
         document.addEventListener("visibilitychange", () => {
           if (document.hidden) this.pauseGame("visibility");
+          else this.wakeLoop();
         });
         window.addEventListener("blur", () => this.pauseGame("blur"));
         window.addEventListener("focus", () => {
           this.lastTimestamp = performance.now();
           if (this.state === "paused") this.showToast("Pressione Enter para continuar");
+          this.wakeLoop();
         });
         window.addEventListener("resize", () => this.resizeCanvas(false), { passive: true });
         window.addEventListener("orientationchange", () => setTimeout(() => this.resizeCanvas(false), 80));
@@ -1408,7 +1438,7 @@
           paused: ["playing", "hit", "celebrating", "gameOver"], gameOver: ["playing"]
         };
         if (next !== this.state && !allowed[this.state]?.includes(next)) return false;
-        this.state = next; this.updateOverlays(); this.notifyAndroidTvState(); return true;
+        this.state = next; this.needsRender = true; this.updateOverlays(); this.notifyAndroidTvState(); this.wakeLoop(); return true;
       }
       startGame() {
         if (this.state !== "ready") return;
@@ -1418,7 +1448,7 @@
         this.showToast(`Modo ${this.difficultySettings.label} · Atravesse as 10 pistas!`);
       }
       pauseGame() {
-        if (!["playing", "hit", "celebrating"].includes(this.state)) return;
+        if (!this.isActiveState()) return;
         this.previousActiveState = this.state;
         this.input.clear(); this.audio.stopWalking(); this.transition("paused");
       }
@@ -1455,7 +1485,7 @@
           this.transition("playing"); this.audio.play("start");
           this.lastTimestamp = performance.now(); this.showToast("Nova partida!");
         }
-        this.notifyAndroidTvState();
+        this.notifyAndroidTvState(); this.markDirty();
       }
       handleConfirm() {
         if (this.state === "ready") this.startGame();
@@ -1464,7 +1494,7 @@
       }
       handleBack() {
         if (this.state === "paused") this.resumeGame();
-        else if (["playing", "hit", "celebrating"].includes(this.state)) this.pauseGame("back");
+        else if (this.isActiveState()) this.pauseGame("back");
       }
       updateOverlays() {
         $("#ready-overlay").hidden = this.state !== "ready";
@@ -1495,6 +1525,7 @@
         this.lanes.forEach((lane) => lane.setup(this.world, this.difficultySettings));
         this.fairnessTimer = this.difficultySettings.fairnessInterval;
         this.fairnessActive = false;
+        this.markDirty();
       }
       cycleDifficulty(direction) {
         if (this.state !== "ready") return;
@@ -1580,10 +1611,12 @@
           if (this.fairnessActive) this.startFairnessWindow();
         } else if (this.player) this.player.configure(this.world);
         this.renderer.rebuild(this);
+        this.markDirty();
       }
       update(dt) {
-        this.elapsed += dt; this.input.updateGamepad(); this.performance.sample(dt);
-        if (!["playing", "hit", "celebrating"].includes(this.state)) return;
+        this.input.updateGamepad();
+        if (!this.isActiveState()) return;
+        this.elapsed += dt; this.performance.sample(dt);
         this.timeLeft = Math.max(0, this.timeLeft - dt);
         if (this.timeLeft <= 0) { this.finishGame(); return; }
         this.player.animTime += dt;
@@ -1622,7 +1655,10 @@
         if (this.state !== "playing") return;
         this.audio.stopWalking();
         this.score += 1;
-        if (this.score > this.best) this.best = this.score;
+        if (this.score > this.best) {
+          this.best = this.score;
+          this.saveBest();
+        }
         this.player.state = "celebrate"; this.celebrationTimer = CONFIG.celebrationDuration;
         this.particles.emit(this.player.x, this.player.y, 28, ["#ffe239", "#fff", "#19a85b", "#2d73d2"], "confetti", this.performance.low);
         this.audio.play("score"); this.transition("celebrating"); this.showToast("+1 PONTO!");
@@ -1683,18 +1719,28 @@
         try { localStorage.setItem("travessia-canarinho-best", String(this.best)); } catch (_) {}
       }
       gameLoop(timestamp) {
+        this.frameHandle = 0;
         if (!this.lastTimestamp) this.lastTimestamp = timestamp;
         const dt = clamp((timestamp - this.lastTimestamp) / 1000, 0, CONFIG.maxDelta);
         this.lastTimestamp = timestamp;
-        this.update(dt); this.renderer.draw(this);
+        this.update(dt);
+        const active = this.isActiveState();
+        if (active || this.needsRender) {
+          this.renderer.draw(this);
+          this.needsRender = false;
+        }
         if (this.debug) this.updateDebug();
-        requestAnimationFrame((next) => this.gameLoop(next));
+        this.requestNextFrame(active ? 0 : 100);
       }
       enableDebug() {
         $("#debug-panel").hidden = false;
-        $("#debug-hitboxes").addEventListener("change", (event) => { this.showHitboxes = event.target.checked; });
+        $("#debug-hitboxes").addEventListener("change", (event) => {
+          this.showHitboxes = event.target.checked;
+          this.markDirty();
+        });
         $("#debug-middle").addEventListener("click", () => {
           this.player.y = this.world.roadTop + this.world.laneH * 3.5;
+          this.markDirty();
         });
         $("#debug-collision").addEventListener("click", () => this.handleCollision());
         $("#debug-score").addEventListener("click", () => this.scorePoint());
@@ -1709,8 +1755,8 @@
         $("#debug-reset").addEventListener("click", () => this.resetGame(false));
         window.__gameTest = Object.freeze({
           snapshot: () => this.snapshot(),
-          setPlayerY: (y) => { this.player.y = clamp(Number(y), this.world.topLimit, this.world.bottomLimit); },
-          setPlayerProgress: (progress) => { this.player.y = lerp(this.world.topLimit, this.world.bottomLimit, clamp(Number(progress), 0, 1)); },
+          setPlayerY: (y) => { this.player.y = clamp(Number(y), this.world.topLimit, this.world.bottomLimit); this.markDirty(); },
+          setPlayerProgress: (progress) => { this.player.y = lerp(this.world.topLimit, this.world.bottomLimit, clamp(Number(progress), 0, 1)); this.markDirty(); },
           forceCollision: () => this.handleCollision(),
           forceScore: () => this.scorePoint(),
           setTimeLeft: (seconds) => { this.timeLeft = clamp(Number(seconds), 0, this.duration); },
@@ -1728,7 +1774,12 @@
           lanes: this.lanes.map((lane) => ({ direction: lane.direction, count: lane.vehicles.length })),
           particles: this.particles.items.length, orientation: this.world.height > this.world.width ? "portrait" : "landscape",
           canvas: { css: [this.canvas.clientWidth, this.canvas.clientHeight], internal: [this.canvas.width, this.canvas.height] },
-          externalResources: [...document.querySelectorAll("[src],[href]")].map((node) => node.src || node.href).filter((url) => /^https?:/i.test(url))
+          renderCount: this.renderer.drawCount,
+          externalResources: [...document.querySelectorAll("[src],[href]")]
+            .map((node) => node.src || node.href)
+            .filter((url) => {
+              try { return new URL(url, location.href).origin !== location.origin; } catch (_) { return false; }
+            })
         };
       }
       updateDebug() {
@@ -1738,6 +1789,7 @@
 `FPS: ${this.performance.current.toFixed(1)}
 Média: ${this.performance.average.toFixed(1)}
 Desempenho: ${this.performance.low ? "reduzido" : "normal"}
+Renderizações: ${snap.renderCount}
 CSS: ${css[0]} × ${css[1]}
 Interna: ${internal[0]} × ${internal[1]}
 Lógica: ${this.world.width} × ${this.world.height}

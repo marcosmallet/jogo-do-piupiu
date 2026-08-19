@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright tests
+        run: npm run test:web
+
+  android:
+    name: Android TV validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: Test, lint and build APKs
+        working-directory: android-tv
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest lintDebug lintRelease packageDebugApk packageReleaseApk
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-tv-apks
+          path: |
+            android-tv/dist/travessia-canarinho-tv-debug.apk
+            android-tv/dist/travessia-canarinho-tv-release-unsigned.apk
+          if-no-files-found: ignore
