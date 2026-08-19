@@ -237,6 +237,8 @@ internal object TvKeyMapper {
     fun actionFor(keyCode: Int): String? = when (keyCode) {
         KeyEvent.KEYCODE_DPAD_UP -> "up"
         KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+        KeyEvent.KEYCODE_DPAD_LEFT -> "left"
+        KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
         KeyEvent.KEYCODE_ENTER,
         KeyEvent.KEYCODE_NUMPAD_ENTER,
         KeyEvent.KEYCODE_DPAD_CENTER,
