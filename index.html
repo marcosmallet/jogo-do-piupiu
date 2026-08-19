@@ -1153,19 +1153,16 @@
         if (!low) {
           ctx.fillStyle = "#0005"; ctx.beginPath(); ctx.ellipse(0, 37 * s, 24 * s, 8 * s, 0, 0, Math.PI * 2); ctx.fill();
         }
-        // Legs and shoes
         ctx.strokeStyle = "#d8871d"; ctx.lineWidth = 7 * s; ctx.lineCap = "round";
         ctx.beginPath(); ctx.moveTo(-10 * s, 20 * s); ctx.lineTo((-11 + step * 5) * s, 34 * s); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(10 * s, 20 * s); ctx.lineTo((11 - step * 5) * s, 34 * s); ctx.stroke();
         ctx.fillStyle = "#e99d28";
         ctx.beginPath(); ctx.ellipse((-15 + step * 5) * s, 36 * s, 10 * s, 5 * s, -.1, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.ellipse((15 - step * 5) * s, 36 * s, 10 * s, 5 * s, .1, 0, Math.PI * 2); ctx.fill();
-        // Blue shorts
         const shorts = ctx.createLinearGradient(0, 7 * s, 0, 26 * s);
         shorts.addColorStop(0, "#1768ba"); shorts.addColorStop(1, "#06346b");
         ctx.fillStyle = shorts; ctx.beginPath(); ctx.roundRect(-23 * s, 7 * s, 46 * s, 20 * s, 7 * s); ctx.fill();
         ctx.fillStyle = "#fff"; ctx.fillRect(-2 * s, 12 * s, 4 * s, 12 * s);
-        // Torso/shirt
         const shirt = ctx.createRadialGradient(-9 * s, -4 * s, 2 * s, 0, 0, 34 * s);
         shirt.addColorStop(0, "#fff26b"); shirt.addColorStop(.35, "#ffda1e"); shirt.addColorStop(1, "#d79c00");
         ctx.fillStyle = shirt; ctx.strokeStyle = "#523d05"; ctx.lineWidth = 2.2 * s;
@@ -1175,23 +1172,19 @@
         ctx.moveTo(20 * s, -18 * s); ctx.lineTo(11 * s, 12 * s); ctx.stroke();
         ctx.fillStyle = "#097f45"; ctx.beginPath(); ctx.arc(0, -1 * s, 6 * s, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#ffe83d"; ctx.beginPath(); ctx.moveTo(0, -6 * s); ctx.lineTo(5 * s, -1 * s); ctx.lineTo(0, 4 * s); ctx.lineTo(-5 * s, -1 * s); ctx.closePath(); ctx.fill();
-        // Wings/arms
         const armLift = celebrate ? -25 : impact ? 9 : -2 + step * 2;
         ctx.strokeStyle = "#d89e05"; ctx.lineWidth = 12 * s;
         ctx.beginPath(); ctx.moveTo(-22 * s, -12 * s); ctx.lineTo(-34 * s, armLift * s); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(22 * s, -12 * s); ctx.lineTo(34 * s, armLift * s); ctx.stroke();
-        // Head and cheek feathers
         const head = ctx.createRadialGradient(-10 * s, -51 * s, 3 * s, 0, -43 * s, 37 * s);
         head.addColorStop(0, "#fff379"); head.addColorStop(.45, "#ffd51c"); head.addColorStop(1, "#c98d00");
         ctx.fillStyle = head; ctx.strokeStyle = "#533b00"; ctx.lineWidth = 2.4 * s;
         ctx.beginPath(); ctx.ellipse(0, -43 * s, 31 * s, 29 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-22 * s, -59 * s); ctx.quadraticCurveTo(-9 * s, -79 * s, -3 * s, -67 * s);
         ctx.quadraticCurveTo(5 * s, -82 * s, 10 * s, -65 * s); ctx.fill(); ctx.stroke();
-        // Feather accents
         ctx.strokeStyle = "#e0a400"; ctx.lineWidth = 1.5 * s; ctx.globalAlpha = .75;
         ctx.beginPath(); ctx.arc(-18 * s, -37 * s, 7 * s, .5, 2.3); ctx.stroke();
         ctx.beginPath(); ctx.arc(18 * s, -37 * s, 7 * s, .8, 2.6); ctx.stroke(); ctx.globalAlpha = 1;
-        // Eyes
         ctx.fillStyle = "#fff";
         ctx.beginPath(); ctx.ellipse(-11 * s, -49 * s, 8 * s, 7 * s, -.15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.ellipse(11 * s, -49 * s, 8 * s, 7 * s, .15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -1201,11 +1194,9 @@
         ctx.beginPath(); ctx.arc((9 + look) * s, -48 * s, 3.4 * s, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-10 * s, -50 * s, 1.2 * s, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(8 * s, -50 * s, 1.2 * s, 0, Math.PI * 2); ctx.fill();
-        // Angry eyebrows
         ctx.strokeStyle = "#382800"; ctx.lineWidth = 5 * s; ctx.lineCap = "round";
         ctx.beginPath(); ctx.moveTo(-20 * s, -58 * s); ctx.lineTo(-5 * s, -53 * s); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(20 * s, -58 * s); ctx.lineTo(5 * s, -53 * s); ctx.stroke();
-        // Detailed beak
         const beak = ctx.createLinearGradient(0, -45 * s, 0, -28 * s);
         beak.addColorStop(0, "#ffb328"); beak.addColorStop(1, "#dc6b0c");
         ctx.fillStyle = beak; ctx.strokeStyle = "#713408"; ctx.lineWidth = 1.8 * s;
@@ -1825,5 +1816,6 @@ Touch: ${this.input.touch ? "sim" : "não"}`;
     }, { once: true });
   })();
   </script>
+  <script src="aaa.js"></script>
 </body>
 </html>
