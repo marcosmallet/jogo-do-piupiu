@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 export const SCENARIO = "paired vertical vs lateral agency baseline";
 const EXPECTED_DIFFICULTIES = ["easy", "normal", "hard"];
 const EXPECTED_MODES = ["vertical", "lateral"];
+const EPSILON = 1e-9;
 const RUN_FINITE_FIELDS = [
   "crossings", "collisions", "nearMisses", "collisionPerCrossing",
   "medianWait", "p90Wait", "medianCrossingTime", "p90CrossingTime",
@@ -22,15 +23,15 @@ const RUN_INTEGER_FIELDS = [
   "crossings", "collisions", "nearMisses", "fairnessFrames", "fairnessWindows",
   "crossingsDuringFairness", "crossingsRecentFairness", "spawned", "despawned"
 ];
-const AGGREGATE_FINITE_FIELDS = [
-  "verticalCrossings", "lateralCrossings", "medianCollisionDelta", "medianWaitDelta",
-  "p90WaitDelta", "medianCrossingTimeDelta", "p90CrossingTimeDelta",
-  "medianFairnessRatioDelta", "medianFairnessWindowsDelta", "medianRecentFairnessShareDelta"
-];
-const DELTA_FINITE_FIELDS = [
+const DELTA_FIELDS = [
   "crossings", "collisionPerCrossing", "nearMisses", "medianWait", "p90Wait",
   "medianCrossingTime", "p90CrossingTime", "fairnessFrames", "fairnessRatio",
   "fairnessWindows", "crossingsDuringFairness", "crossingsRecentFairness", "recentFairnessShare"
+];
+const AGGREGATE_FIELDS = [
+  "verticalCrossings", "lateralCrossings", "medianCollisionDelta", "medianWaitDelta",
+  "p90WaitDelta", "medianCrossingTimeDelta", "p90CrossingTimeDelta",
+  "medianFairnessRatioDelta", "medianFairnessWindowsDelta", "medianRecentFairnessShareDelta"
 ];
 
 function assert(condition, message) {
@@ -39,6 +40,19 @@ function assert(condition, message) {
 
 function finiteNumber(value, label) {
   assert(typeof value === "number" && Number.isFinite(value), `${label} must be a finite number`);
+}
+
+function sameNumber(actual, expected, label) {
+  finiteNumber(actual, label);
+  const tolerance = EPSILON * Math.max(1, Math.abs(actual), Math.abs(expected));
+  assert(Math.abs(actual - expected) <= tolerance,
+    `${label} must equal derived value ${expected}; received ${actual}`);
+}
+
+function percentile(values, fraction) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
 }
 
 function validateRun(run, label) {
@@ -54,6 +68,39 @@ function validateRun(run, label) {
   assert(run.spawned > 0, `${label}.spawned must be > 0`);
   assert(run.despawned > 0, `${label}.despawned must be > 0`);
   assert(run.horizontalSpeedLanes > 0, `${label}.horizontalSpeedLanes must be > 0`);
+}
+
+function canonicalRunMap(runs) {
+  const map = new Map();
+  runs.forEach((run) => map.set(`${run.difficulty}:${run.seed}:${run.mode}`, run));
+  return map;
+}
+
+function assertRunCopy(copy, canonical, label) {
+  assert(copy && typeof copy === "object" && !Array.isArray(copy), `${label} must be an object`);
+  for (const key of ["difficulty", "seed", "mode", ...RUN_FINITE_FIELDS]) {
+    if (typeof canonical[key] === "number") sameNumber(copy[key], canonical[key], `${label}.${key}`);
+    else assert(copy[key] === canonical[key], `${label}.${key} must equal canonical run value`);
+  }
+}
+
+function derivedDelta(vertical, lateral) {
+  return Object.fromEntries(DELTA_FIELDS.map((field) => [field, lateral[field] - vertical[field]]));
+}
+
+function derivedAggregate(pairs) {
+  return {
+    verticalCrossings: pairs.reduce((sum, pair) => sum + pair.vertical.crossings, 0),
+    lateralCrossings: pairs.reduce((sum, pair) => sum + pair.lateral.crossings, 0),
+    medianCollisionDelta: percentile(pairs.map((pair) => pair.delta.collisionPerCrossing), .5),
+    medianWaitDelta: percentile(pairs.map((pair) => pair.delta.medianWait), .5),
+    p90WaitDelta: percentile(pairs.map((pair) => pair.delta.p90Wait), .5),
+    medianCrossingTimeDelta: percentile(pairs.map((pair) => pair.delta.medianCrossingTime), .5),
+    p90CrossingTimeDelta: percentile(pairs.map((pair) => pair.delta.p90CrossingTime), .5),
+    medianFairnessRatioDelta: percentile(pairs.map((pair) => pair.delta.fairnessRatio), .5),
+    medianFairnessWindowsDelta: percentile(pairs.map((pair) => pair.delta.fairnessWindows), .5),
+    medianRecentFairnessShareDelta: percentile(pairs.map((pair) => pair.delta.recentFairnessShare), .5)
+  };
 }
 
 export function validateReport(report) {
@@ -87,6 +134,7 @@ export function validateReport(report) {
     }
   }
 
+  const runMap = canonicalRunMap(report.runs);
   const summaryDifficulties = report.pairedSummary.map((item) => item.difficulty).sort();
   assert(summaryDifficulties.join(",") === [...EXPECTED_DIFFICULTIES].sort().join(","),
     "paired summaries must cover easy, normal and hard exactly once");
@@ -99,23 +147,27 @@ export function validateReport(report) {
     const expectedSeeds = [...seeds].sort((a, b) => a - b);
     assert(!pairSeeds.some((seed, index) => seed !== expectedSeeds[index]), `${label}: paired seeds do not match run seeds`);
 
+    const canonicalPairs = [];
     for (const pair of item.pairs) {
       const pairLabel = `${label}.pairs[seed=${pair.seed}]`;
-      const expectedVertical = report.runs.find((run) => run.difficulty === item.difficulty && run.seed === pair.seed && run.mode === "vertical");
-      const expectedLateral = report.runs.find((run) => run.difficulty === item.difficulty && run.seed === pair.seed && run.mode === "lateral");
-      assert(expectedVertical && expectedLateral, `${pairLabel} does not map to both run modes`);
-      assert(pair.vertical?.difficulty === item.difficulty && pair.vertical?.seed === pair.seed && pair.vertical?.mode === "vertical",
-        `${pairLabel}.vertical does not match its run key`);
-      assert(pair.lateral?.difficulty === item.difficulty && pair.lateral?.seed === pair.seed && pair.lateral?.mode === "lateral",
-        `${pairLabel}.lateral does not match its run key`);
+      const vertical = runMap.get(`${item.difficulty}:${pair.seed}:vertical`);
+      const lateral = runMap.get(`${item.difficulty}:${pair.seed}:lateral`);
+      assert(vertical && lateral, `${pairLabel} does not map to both run modes`);
+      assertRunCopy(pair.vertical, vertical, `${pairLabel}.vertical`);
+      assertRunCopy(pair.lateral, lateral, `${pairLabel}.lateral`);
       assert(pair.delta && typeof pair.delta === "object" && !Array.isArray(pair.delta), `${pairLabel}.delta is missing`);
-      for (const field of DELTA_FINITE_FIELDS) finiteNumber(pair.delta[field], `${pairLabel}.delta.${field}`);
+      const delta = derivedDelta(vertical, lateral);
+      for (const field of DELTA_FIELDS) sameNumber(pair.delta[field], delta[field], `${pairLabel}.delta.${field}`);
+      canonicalPairs.push({ vertical, lateral, delta });
     }
 
     assert(item.aggregate && typeof item.aggregate === "object" && !Array.isArray(item.aggregate), `${label}.aggregate is missing`);
-    for (const field of AGGREGATE_FINITE_FIELDS) finiteNumber(item.aggregate[field], `${label}.aggregate.${field}`);
-    assert(item.aggregate.verticalCrossings >= 0 && Number.isInteger(item.aggregate.verticalCrossings), `${label}.aggregate.verticalCrossings must be a non-negative integer`);
-    assert(item.aggregate.lateralCrossings >= 0 && Number.isInteger(item.aggregate.lateralCrossings), `${label}.aggregate.lateralCrossings must be a non-negative integer`);
+    const aggregate = derivedAggregate(canonicalPairs);
+    for (const field of AGGREGATE_FIELDS) sameNumber(item.aggregate[field], aggregate[field], `${label}.aggregate.${field}`);
+    assert(Number.isInteger(item.aggregate.verticalCrossings) && item.aggregate.verticalCrossings >= 0,
+      `${label}.aggregate.verticalCrossings must be a non-negative integer`);
+    assert(Number.isInteger(item.aggregate.lateralCrossings) && item.aggregate.lateralCrossings >= 0,
+      `${label}.aggregate.lateralCrossings must be a non-negative integer`);
   }
 
   return { runs: report.runs.length, summaries: report.pairedSummary.length, seeds };
