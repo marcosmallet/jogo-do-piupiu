@@ -18,6 +18,7 @@ function writeBaseline(report) {
   const lines = [
     "### Horizontal agency baseline",
     "",
+    `Scenario: \`${SCENARIO}\``,
     `Seeds: ${report.runs?.filter((run) => run.mode === "vertical").map((run) => run.seed).filter((value, index, values) => values.indexOf(value) === index).join(", ") || "n/a"}`,
     "",
     "| Difficulty | Vertical crossings | Lateral crossings | Δ collision/crossing | Δ p50 wait | Δ p90 wait | Δ p50 crossing | Δ p90 crossing | Δ fairness ratio | Δ recent fairness share |",

@@ -26,6 +26,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
         run: npm run test:web
+      - name: Validate horizontal agency observability
+        run: node scripts/validate-horizontal-agency-baseline.mjs
       - name: Publish horizontal agency summary
         if: always()
         run: |
@@ -37,13 +39,13 @@ jobs:
           fi
       - name: Upload horizontal agency baseline
         uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: horizontal-agency-baseline
           path: |
             test-results/horizontal-agency-baseline.json
             test-results/horizontal-agency-summary.md
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   android:
     name: Android TV validation
