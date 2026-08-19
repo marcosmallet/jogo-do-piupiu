@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+test.describe.configure({ mode: "serial" });
+
 const PROFILES = [
   { name: "720p TV", viewport: { width: 1280, height: 720 }, minAverageFps: 20, minP10Fps: 12 },
   { name: "1080p TV", viewport: { width: 1920, height: 1080 }, minAverageFps: 20, minP10Fps: 12 },
