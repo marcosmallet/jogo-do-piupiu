@@ -42,6 +42,11 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon testDebugUnitTest lintDebug lintRelease packageDebugApk packageReleaseApk
+      - name: Verify packaged APKs are premium and offline
+        working-directory: android-tv
+        run: |
+          chmod +x tools/Verify-Apk.sh
+          ./tools/Verify-Apk.sh
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         if: always()
