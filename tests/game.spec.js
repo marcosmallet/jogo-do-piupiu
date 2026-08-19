@@ -58,14 +58,22 @@ test("collision retreats the player and grants temporary invulnerability", async
   await page.keyboard.press("Enter");
   await expectState(page, "playing");
 
-  await page.evaluate(() => window.__gameTest.setPlayerProgress(0.45));
-  const before = await snapshot(page);
-  await page.evaluate(() => window.__gameTest.forceCollision());
-  const after = await snapshot(page);
+  const result = await page.evaluate(() => {
+    const game = window.travessiaGame;
+    // Place the bird well inside the road so the exact two-lane retreat cannot
+    // hit the lower clamp. Keep setup + collision synchronous to avoid rAF races.
+    const lane = game.lanes[Math.floor(game.lanes.length / 2)];
+    game.player.y = lane.y(game.world);
+    game.player.invulnerable = 0;
+    const before = window.__gameTest.snapshot();
+    window.__gameTest.forceCollision();
+    const after = window.__gameTest.snapshot();
+    return { before, after };
+  });
 
-  expect(after.state).toBe("hit");
-  expect(after.player.invulnerable).toBeGreaterThan(0);
-  expect(after.player.y).toBeGreaterThan(before.player.y);
+  expect(result.after.state).toBe("hit");
+  expect(result.after.player.invulnerable).toBeGreaterThan(0);
+  expect(result.after.player.y).toBeGreaterThan(result.before.player.y);
 });
 
 test("does not continuously repaint a static screen", async ({ page }) => {
