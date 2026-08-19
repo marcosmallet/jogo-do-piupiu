@@ -543,3 +543,95 @@
 
   window.initializeGame = () => installPremiumLayer(originalInitialize());
 })();
+
+(() => {
+  "use strict";
+
+  function installAdaptiveScore(game) {
+    if (!game || game.__adaptiveScoreInstalled) return;
+    game.__adaptiveScoreInstalled = true;
+
+    const state = { beat: 0, lastBeatAt: 0, bpm: 96, active: false, notesPlayed: 0 };
+    const activeStates = new Set(["playing", "hit", "celebrating"]);
+    const scale = [196, 220, 246.94, 293.66, 329.63, 392];
+
+    function snapshot() {
+      return { ...state };
+    }
+
+    function tone(ctx, frequency, duration, volume, type = "triangle", offset = 0) {
+      try {
+        const start = ctx.currentTime + offset;
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(.0001, start);
+        gain.gain.exponentialRampToValueAtTime(volume, start + .012);
+        gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+        oscillator.connect(gain).connect(ctx.destination);
+        oscillator.start(start);
+        oscillator.stop(start + duration + .02);
+        state.notesPlayed += 1;
+      } catch (_) {}
+    }
+
+    function beatProfile() {
+      const premium = game.__premiumSnapshot?.() || {};
+      const phase = premium.phase || "AQUECIMENTO";
+      const rush = (premium.rushTimer || 0) > 0;
+      const combo = premium.combo || 0;
+      const hype = premium.hype || 0;
+      const phaseBpm = phase === "RETA FINAL" ? 126 : phase === "PRESSÃO SUBINDO" ? 110 : 96;
+      return { premium, phase, rush, combo, hype, bpm: rush ? 148 : phaseBpm + Math.round(hype * .08) };
+    }
+
+    function playBeat(profile) {
+      if (!game.audio?.enabled) return;
+      const ctx = game.audio.ensureContext?.();
+      if (!ctx || ctx.state !== "running") return;
+
+      const low = !!game.performance?.low;
+      const index = state.beat % 8;
+      const melodyPattern = [0, 2, 3, 2, 1, 3, 5, 3];
+      const base = scale[melodyPattern[index]];
+      const accent = index % 4 === 0;
+      const rushLift = profile.rush ? 2 : 1;
+      const frequency = base * rushLift;
+
+      tone(ctx, frequency, low ? .08 : .12, accent ? .036 : .024, profile.rush ? "square" : "triangle");
+      if (!low && accent) tone(ctx, frequency / 2, .2, .025, "sine");
+      if (!low && profile.combo >= 3 && index % 2 === 1) tone(ctx, frequency * 1.5, .07, .012, "sine", .04);
+      if (profile.rush && !low && index % 2 === 0) tone(ctx, frequency * 2, .055, .009, "triangle", .065);
+    }
+
+    function tick(now) {
+      const isActive = activeStates.has(game.state);
+      state.active = isActive;
+      if (!isActive || !game.audio?.enabled) {
+        state.lastBeatAt = now;
+        return;
+      }
+
+      const profile = beatProfile();
+      state.bpm = profile.bpm;
+      const interval = 60000 / state.bpm;
+      if (!state.lastBeatAt) state.lastBeatAt = now;
+      if (now - state.lastBeatAt < interval) return;
+      state.lastBeatAt = now;
+      playBeat(profile);
+      state.beat = (state.beat + 1) % 32;
+    }
+
+    const timer = window.setInterval(() => tick(performance.now()), 90);
+    window.addEventListener("pagehide", () => clearInterval(timer), { once: true });
+
+    if (game.debug) {
+      window.__scoreTest = Object.freeze({ snapshot });
+    }
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    installAdaptiveScore(window.travessiaGame);
+  }, { once: true });
+})();
