@@ -26,13 +26,30 @@
       seenVehicles: new WeakSet(),
       cueTimer: 0,
       timeBonus: 0,
-      collisions: 0
+      collisions: 0,
+      finishedRecorded: false
     };
+
+    const PROFILE_KEY = "travessia-canarinho-premium-profile";
+    const profile = (() => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
+        return {
+          runs: Math.max(0, Number(parsed.runs) || 0),
+          bestCombo: Math.max(0, Number(parsed.bestCombo) || 0),
+          totalNearMisses: Math.max(0, Number(parsed.totalNearMisses) || 0),
+          sGrades: Math.max(0, Number(parsed.sGrades) || 0),
+          bestGrade: ["S", "A", "B", "C"].includes(parsed.bestGrade) ? parsed.bestGrade : "C"
+        };
+      } catch (_) {
+        return { runs: 0, bestCombo: 0, totalNearMisses: 0, sGrades: 0, bestGrade: "C" };
+      }
+    })();
 
     const style = document.createElement("style");
     style.id = "premium-game-feel-style";
     style.textContent = `
-      #aaa-ambient, #aaa-speedlines, #aaa-flash {
+      #aaa-ambient, #aaa-speedlines, #aaa-flash, #aaa-vignette {
         position: absolute; inset: 0; pointer-events: none;
       }
       #aaa-ambient {
@@ -44,6 +61,16 @@
         opacity: calc(.22 + var(--aaa-hype, 0) * .004);
         transition: opacity .35s ease;
       }
+      #aaa-vignette {
+        z-index: 4; box-shadow: inset 0 0 110px rgba(0,0,0,.28);
+        transition: box-shadow .6s ease;
+      }
+      #game-shell.aaa-phase-mid #aaa-ambient { filter: saturate(1.12) contrast(1.03); }
+      #game-shell.aaa-phase-final #aaa-ambient {
+        background: radial-gradient(circle at 50% 8%, rgba(255,201,86,.22), transparent 32%),
+          linear-gradient(180deg, rgba(138,54,16,.08), transparent 32%, rgba(0,0,0,.16));
+      }
+      #game-shell.aaa-phase-final #aaa-vignette { box-shadow: inset 0 0 135px rgba(74,15,0,.34); }
       #aaa-speedlines {
         z-index: 4; opacity: 0; transition: opacity .2s ease;
         background: repeating-linear-gradient(90deg, transparent 0 7%, rgba(255,255,255,.09) 7.15% 7.35%, transparent 7.5% 14%);
@@ -89,6 +116,16 @@
       #aaa-cue.show { animation: aaaCue .68s cubic-bezier(.2,.8,.2,1); }
       #game-shell.aaa-rush #aaa-hype-track { border-color: #ffe766; box-shadow: 0 0 18px #ffd52d88, inset 0 1px 3px #0009; }
       #game-shell.aaa-rush #aaa-hype-fill { animation: aaaHypePulse .5s ease-in-out infinite alternate; }
+      #aaa-ready-meta {
+        display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 12px;
+        margin: 10px auto 4px; color: #b9dac5; font-size: clamp(9px, 1vw, 12px);
+        font-weight: 800;
+      }
+      #aaa-ready-meta strong { color: #ffe34c; }
+      #aaa-tutorial {
+        max-width: 570px; margin: 9px auto 0; padding: 8px 11px; border-radius: 11px;
+        background: #0003; color: #cfe5d6; font-size: clamp(9px, 1.05vw, 12px); line-height: 1.35;
+      }
       #aaa-gameover-stats {
         display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: -13px auto 22px;
         max-width: 520px;
@@ -112,6 +149,8 @@
         #aaa-hud { top: 10.8%; width: 68%; }
         #aaa-phase { display: none; }
         #aaa-cue { top: 42%; max-width: 92%; }
+        #aaa-ready-meta { gap: 4px 8px; }
+        #aaa-tutorial { display: none; }
       }
       @media (max-height: 620px) and (orientation: landscape) {
         #aaa-hud { top: 14%; width: 48%; }
@@ -125,11 +164,14 @@
       #game-shell.aaa-lowfx #aaa-speedlines,
       #game-shell.aaa-lowfx #aaa-flash { display: none !important; }
       #game-shell.aaa-lowfx #aaa-ambient { opacity: .12; }
+      #game-shell.aaa-lowfx #aaa-vignette { box-shadow: inset 0 0 60px rgba(0,0,0,.18); }
     `;
     document.head.appendChild(style);
 
     const ambient = document.createElement("div");
     ambient.id = "aaa-ambient";
+    const vignette = document.createElement("div");
+    vignette.id = "aaa-vignette";
     const speedlines = document.createElement("div");
     speedlines.id = "aaa-speedlines";
     const flash = document.createElement("div");
@@ -151,8 +193,20 @@
       </div>
       <div id="aaa-hype-label">Adrenalina</div>`;
 
-    game.shell.prepend(ambient, speedlines, flash);
+    game.shell.prepend(ambient, vignette, speedlines, flash);
     game.shell.append(hud, cue);
+
+    const readyPanel = document.querySelector("#ready-overlay .panel");
+    const difficultyPicker = document.querySelector(".difficulty-picker");
+    const readyMeta = document.createElement("div");
+    readyMeta.id = "aaa-ready-meta";
+    const tutorial = document.createElement("p");
+    tutorial.id = "aaa-tutorial";
+    tutorial.textContent = "Passe raspando pelos carros e complete travessias em sequência para encher a Adrenalina. Ao chegar a 100%, o Modo Pistola abre uma janela de vantagem por alguns segundos.";
+    if (readyPanel && difficultyPicker) {
+      readyPanel.insertBefore(readyMeta, difficultyPicker);
+      difficultyPicker.insertAdjacentElement("afterend", tutorial);
+    }
 
     const gameoverPanel = document.querySelector("#gameover-overlay .panel");
     const restartButton = document.querySelector("#restart-button");
@@ -168,6 +222,18 @@
     const phaseEl = document.querySelector("#aaa-phase");
     const hypeTrack = document.querySelector("#aaa-hype-track");
     const hypeFill = document.querySelector("#aaa-hype-fill");
+
+    function gradeRank(value) {
+      return { S: 4, A: 3, B: 2, C: 1 }[value] || 0;
+    }
+
+    function saveProfile() {
+      try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (_) {}
+    }
+
+    function updateProfileUi() {
+      readyMeta.innerHTML = `<span>Corridas <strong>${profile.runs}</strong></span><span>Melhor combo <strong>x${profile.bestCombo}</strong></span><span>Classe máxima <strong>${profile.bestGrade}</strong></span><span>Classes S <strong>${profile.sGrades}</strong></span>`;
+    }
 
     function vibrate(pattern) {
       if (game.tvMode || typeof navigator.vibrate !== "function") return;
@@ -232,6 +298,8 @@
       hypeTrack.setAttribute("aria-valuenow", String(Math.round(hype)));
       document.querySelector("#aaa-hype-label").textContent = state.rushTimer > 0 ? "MODO PISTOLA" : "Adrenalina";
       game.shell.classList.toggle("aaa-rush", state.rushTimer > 0);
+      game.shell.classList.toggle("aaa-phase-mid", state.phase === "PRESSÃO SUBINDO");
+      game.shell.classList.toggle("aaa-phase-final", state.phase === "RETA FINAL");
       game.shell.classList.toggle("aaa-lowfx", !!game.performance?.low || reducedMotion.matches);
     }
 
@@ -293,7 +361,6 @@
       const rushRelief = state.rushTimer > 0 ? .9 : 1;
       const factor = (1 + difficultyRamp * eased) * rushRelief;
       state.intensity = factor;
-      state.phase = phaseFor(progress);
       for (const lane of game.lanes) {
         for (const vehicle of lane.vehicles) {
           if (!vehicle.__premiumBaseSpeed) vehicle.__premiumBaseSpeed = vehicle.speed;
@@ -308,6 +375,19 @@
       if (performanceScore >= 11) return "A";
       if (performanceScore >= 6) return "B";
       return "C";
+    }
+
+    function recordRun() {
+      if (state.finishedRecorded) return;
+      state.finishedRecorded = true;
+      const runGrade = grade();
+      profile.runs += 1;
+      profile.bestCombo = Math.max(profile.bestCombo, state.maxCombo);
+      profile.totalNearMisses += state.nearMisses;
+      if (runGrade === "S") profile.sGrades += 1;
+      if (gradeRank(runGrade) > gradeRank(profile.bestGrade)) profile.bestGrade = runGrade;
+      saveProfile();
+      updateProfileUi();
     }
 
     function updateGameoverStats() {
@@ -333,7 +413,9 @@
       state.seenVehicles = new WeakSet();
       state.timeBonus = 0;
       state.collisions = 0;
+      state.finishedRecorded = false;
       updatePresentation();
+      updateProfileUi();
       updateGameoverStats();
     }
 
@@ -376,7 +458,10 @@
       game.timeLeft = Math.min(maxTime, game.timeLeft + bonus);
       state.timeBonus += Math.max(0, game.timeLeft - previousTime);
       addHype(10 + state.combo * 2);
-      showCue(state.combo > 1 ? `TRAVESSIA x${state.combo}  +${bonus.toFixed(1)}s` : `TRAVESSIA!  +${bonus.toFixed(1)}s`, "score");
+      const milestone = state.combo === 8 ? "LENDÁRIO!" : state.combo === 5 ? "IMPARÁVEL!" : state.combo === 3 ? "EMBALADO!" : null;
+      const crossingCue = milestone ? `${milestone} x${state.combo}  +${bonus.toFixed(1)}s` :
+        state.combo > 1 ? `TRAVESSIA x${state.combo}  +${bonus.toFixed(1)}s` : `TRAVESSIA!  +${bonus.toFixed(1)}s`;
+      showCue(crossingCue, "score");
       if (state.combo > 1) accent("combo");
       vibrate(24);
       game.updateHud();
@@ -408,7 +493,9 @@
 
     const originalFinish = game.finishGame.bind(game);
     game.finishGame = () => {
+      const wasFinished = game.state === "gameOver";
       originalFinish();
+      if (!wasFinished && game.state === "gameOver") recordRun();
       updateGameoverStats();
     };
 
@@ -429,7 +516,8 @@
       phase: state.phase,
       timeBonus: state.timeBonus,
       collisions: state.collisions,
-      grade: grade()
+      grade: grade(),
+      profile: { ...profile }
     });
 
     if (game.debug) {
@@ -448,6 +536,7 @@
     }
 
     reducedMotion.addEventListener?.("change", updatePresentation);
+    updateProfileUi();
     resetPremiumState();
     return game;
   }
