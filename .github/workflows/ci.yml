@@ -26,6 +26,24 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
         run: npm run test:web
+      - name: Publish horizontal agency summary
+        if: always()
+        run: |
+          if [[ -f test-results/horizontal-agency-summary.md ]]; then
+            cat test-results/horizontal-agency-summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Horizontal agency baseline" >> "$GITHUB_STEP_SUMMARY"
+            echo "Baseline artifact was not produced in this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload horizontal agency baseline
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: horizontal-agency-baseline
+          path: |
+            test-results/horizontal-agency-baseline.json
+            test-results/horizontal-agency-summary.md
+          if-no-files-found: ignore
 
   android:
     name: Android TV validation
