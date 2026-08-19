@@ -10,6 +10,8 @@ class TvKeyMapperTest {
     fun mapsRemoteAndGamepadKeys() {
         assertEquals("up", TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_UP))
         assertEquals("down", TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_DOWN))
+        assertEquals("left", TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals("right", TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertEquals("confirm", TvKeyMapper.actionFor(KeyEvent.KEYCODE_ENTER))
         assertEquals("confirm", TvKeyMapper.actionFor(KeyEvent.KEYCODE_NUMPAD_ENTER))
         assertEquals("confirm", TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_CENTER))
@@ -22,8 +24,6 @@ class TvKeyMapperTest {
 
     @Test
     fun ignoresUnsupportedKeys() {
-        assertNull(TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_LEFT))
-        assertNull(TvKeyMapper.actionFor(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertNull(TvKeyMapper.actionFor(KeyEvent.KEYCODE_VOLUME_UP))
         assertNull(TvKeyMapper.actionFor(KeyEvent.KEYCODE_VOLUME_DOWN))
         assertNull(TvKeyMapper.actionFor(KeyEvent.KEYCODE_MENU))
