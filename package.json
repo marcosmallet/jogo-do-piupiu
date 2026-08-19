@@ -7,7 +7,8 @@
     "test": "playwright test",
     "test:web": "playwright test",
     "test:web:headed": "playwright test --headed",
-    "test:version": "node scripts/check-version.mjs"
+    "test:version": "node scripts/check-version.mjs",
+    "test:baseline-validator": "node --test scripts/validate-horizontal-agency-baseline.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.54.2"

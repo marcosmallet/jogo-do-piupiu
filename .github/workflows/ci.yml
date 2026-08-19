@@ -22,6 +22,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Validate release version contract
         run: npm run test:version
+      - name: Validate baseline validator contract
+        run: npm run test:baseline-validator
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
