@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Validate release version contract
+        run: npm run test:version
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests

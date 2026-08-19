@@ -1,12 +1,13 @@
 {
   "name": "travessia-do-canarinho",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "playwright test",
     "test:web": "playwright test",
-    "test:web:headed": "playwright test --headed"
+    "test:web:headed": "playwright test --headed",
+    "test:version": "node scripts/check-version.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.54.2"
