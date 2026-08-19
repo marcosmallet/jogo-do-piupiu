@@ -10,24 +10,14 @@ const CI_FLOOR = Object.freeze({
   maxCollisionRatio: 3
 });
 
-const PREMIUM_TARGET = Object.freeze({
-  maxMedianWaitSeconds: 2.5,
-  maxP90WaitSeconds: 5,
-  maxRecentFairnessShare: .35,
-  maxCollisionPerCrossing: .75
-});
-
 async function waitForGame(page) {
-  await page.waitForFunction(() => Boolean(
-    window.travessiaGame && window.__gameTest && window.__aaaTest
-  ));
+  await page.waitForFunction(() => Boolean(window.travessiaGame && window.__gameTest && window.__aaaTest));
 }
 
 function percentile(values, fraction) {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction));
-  return sorted[index];
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
 }
 
 test("fairness corridor has causal ON/OFF evidence with identical seeds", async ({ page }) => {
@@ -57,9 +47,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       return lane.vehicles.every((vehicle) => {
         const half = vehicle.width * .46;
         const projected = vehicle.x + lane.direction * vehicle.speed * horizon;
-        const minX = Math.min(vehicle.x, projected) - half;
-        const maxX = Math.max(vehicle.x, projected) + half;
-        return maxX < left || minX > right;
+        return Math.max(vehicle.x, projected) + half < left || Math.min(vehicle.x, projected) - half > right;
       });
     }
 
@@ -77,9 +65,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       game.fairnessTimer = 999;
       game.fairnessElapsed = 0;
       game.fairnessAnnounced = false;
-      for (const lane of game.lanes) {
-        for (const vehicle of lane.vehicles) vehicle.fairnessHold = false;
-      }
+      for (const lane of game.lanes) for (const vehicle of lane.vehicles) vehicle.fairnessHold = false;
     }
 
     function run(difficulty, seed, fairnessEnabled) {
@@ -87,7 +73,6 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       game.updateFairnessWindow = fairnessEnabled
         ? originalFairnessUpdate
         : function disabledFairness() { releaseFairnessHolds(); };
-
       game.resetGame(true);
       game.setDifficulty(difficulty);
       game.resetGame(true);
@@ -101,11 +86,10 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       const maxSteps = Math.ceil(38 / dt);
       let previousScore = 0;
       let lastFairnessAt = -Infinity;
-      let fairnessFrames = 0;
       let recentFairnessCrossings = 0;
+      let committedLane = null;
       let currentTarget = null;
       let waitStartedAt = 0;
-      let committedLane = null;
       let simTime = 0;
       const waits = [];
       let spawned = 0;
@@ -114,24 +98,18 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
 
       for (let step = 0; step < maxSteps && game.state !== "gameOver"; step++) {
         simTime += dt;
-
-        if (game.fairnessActive) {
-          fairnessFrames += 1;
-          lastFairnessAt = simTime;
-        }
+        if (game.fairnessActive) lastFairnessAt = simTime;
 
         if (game.state === "playing") {
-          if (committedLane == null) {
-            const candidate = targetLane();
-            if (candidate) {
-              if (currentTarget !== candidate.index) {
-                currentTarget = candidate.index;
-                waitStartedAt = simTime;
-              }
-              if (laneIsSafe(candidate)) {
-                waits.push(Math.max(0, simTime - waitStartedAt));
-                committedLane = candidate.index;
-              }
+          const candidate = targetLane();
+          if (committedLane == null && candidate) {
+            if (currentTarget !== candidate.index) {
+              currentTarget = candidate.index;
+              waitStartedAt = simTime;
+            }
+            if (laneIsSafe(candidate)) {
+              waits.push(Math.max(0, simTime - waitStartedAt));
+              committedLane = candidate.index;
             }
           }
 
@@ -143,18 +121,16 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
               currentTarget = null;
             }
           } else {
-            game.input.up = false;
+            // No lane remains once the bird has cleared lane 0. Continue across
+            // the final grass strip until topGoal so a completed run is scored.
+            game.input.up = !candidate && game.player.y > game.world.topGoal;
           }
         } else {
           game.input.up = false;
         }
 
         game.update(dt);
-        if (game.fairnessActive) {
-          fairnessFrames += 1;
-          lastFairnessAt = simTime;
-        }
-
+        if (game.fairnessActive) lastFairnessAt = simTime;
         if (game.score > previousScore) {
           const gained = game.score - previousScore;
           if (simTime - lastFairnessAt <= recentFairnessWindow) recentFairnessCrossings += gained;
@@ -172,28 +148,21 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       game.input.clear();
       const premium = window.__aaaTest.snapshot();
       const sortedWaits = [...waits].sort((a, b) => a - b);
-      const percentile = (fraction) => {
-        if (!sortedWaits.length) return 0;
-        const index = Math.min(sortedWaits.length - 1, Math.floor((sortedWaits.length - 1) * fraction));
-        return sortedWaits[index];
-      };
-
+      const pick = (fraction) => sortedWaits.length
+        ? sortedWaits[Math.min(sortedWaits.length - 1, Math.floor((sortedWaits.length - 1) * fraction))]
+        : 0;
       return {
         difficulty,
         seed,
         fairnessEnabled,
         crossings: game.score,
-        unassistedCrossings: Math.max(0, game.score - recentFairnessCrossings),
         recentFairnessCrossings,
-        recentFairnessWindow,
         collisions: premium.collisions,
         nearMisses: premium.nearMisses,
-        rushCount: premium.rushCount,
-        medianWait: percentile(.5),
-        p90Wait: percentile(.9),
+        medianWait: pick(.5),
+        p90Wait: pick(.9),
         maxWait: sortedWaits.at(-1) || 0,
         opportunities: waits.length,
-        fairnessRatio: fairnessFrames / (maxSteps * 2),
         spawned,
         despawned
       };
@@ -219,59 +188,22 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
     expect(run.spawned, `${run.difficulty}/${run.seed}: traffic must spawn`).toBeGreaterThan(0);
     expect(run.despawned, `${run.difficulty}/${run.seed}: traffic must despawn`).toBeGreaterThan(0);
     expect(run.opportunities, `${run.difficulty}/${run.seed}: driver must observe opportunities`).toBeGreaterThan(0);
-    expect(run.maxWait, `${run.difficulty}/${run.seed}: CI floor for a single wait`).toBeLessThan(CI_FLOOR.maxSingleWaitSeconds);
+    expect(run.maxWait, `${run.difficulty}/${run.seed}: single-wait CI floor`).toBeLessThan(CI_FLOOR.maxSingleWaitSeconds);
   }
 
   for (const difficulty of ["easy", "normal", "hard"]) {
     const enabled = report.filter((run) => run.difficulty === difficulty && run.fairnessEnabled);
     const disabled = report.filter((run) => run.difficulty === difficulty && !run.fairnessEnabled);
-
     expect(enabled.map((run) => run.seed)).toEqual(disabled.map((run) => run.seed));
 
     const disabledCrossings = disabled.reduce((sum, run) => sum + run.crossings, 0);
     const disabledCollisions = disabled.reduce((sum, run) => sum + run.collisions, 0);
     const disabledMedianWait = percentile(disabled.map((run) => run.medianWait), .5);
-
-    expect(disabledCrossings, `${difficulty}: baseline must remain completable without fairness`).toBeGreaterThanOrEqual(CI_FLOOR.minCrossingsPerDifficulty);
-    expect(disabledMedianWait, `${difficulty}: median wait CI floor without fairness`).toBeLessThan(CI_FLOOR.maxMedianWaitSeconds);
-    expect(
-      disabledCollisions,
-      `${difficulty}: collision CI floor without fairness`
-    ).toBeLessThanOrEqual(disabledCrossings * CI_FLOOR.maxCollisionRatio + disabled.length);
+    expect(disabledCrossings, `${difficulty}: completable without fairness`).toBeGreaterThanOrEqual(CI_FLOOR.minCrossingsPerDifficulty);
+    expect(disabledMedianWait, `${difficulty}: median wait without fairness`).toBeLessThan(CI_FLOOR.maxMedianWaitSeconds);
+    expect(disabledCollisions, `${difficulty}: collision floor without fairness`)
+      .toBeLessThanOrEqual(disabledCrossings * CI_FLOOR.maxCollisionRatio + disabled.length);
   }
 
-  const summary = ["easy", "normal", "hard"].map((difficulty) => {
-    const pair = (fairnessEnabled) => report.filter(
-      (run) => run.difficulty === difficulty && run.fairnessEnabled === fairnessEnabled
-    );
-    const aggregate = (runs) => {
-      const crossings = runs.reduce((sum, run) => sum + run.crossings, 0);
-      const collisions = runs.reduce((sum, run) => sum + run.collisions, 0);
-      const recentFairnessCrossings = runs.reduce((sum, run) => sum + run.recentFairnessCrossings, 0);
-      return {
-        crossings,
-        collisions,
-        nearMisses: runs.reduce((sum, run) => sum + run.nearMisses, 0),
-        medianWait: percentile(runs.map((run) => run.medianWait), .5),
-        p90Wait: percentile(runs.map((run) => run.p90Wait), .9),
-        maxWait: Math.max(...runs.map((run) => run.maxWait)),
-        recentFairnessShare: crossings ? recentFairnessCrossings / crossings : 0,
-        collisionPerCrossing: crossings ? collisions / crossings : collisions
-      };
-    };
-    return {
-      difficulty,
-      fairnessOn: aggregate(pair(true)),
-      fairnessOff: aggregate(pair(false)),
-      premiumTarget: PREMIUM_TARGET
-    };
-  });
-
-  console.log(JSON.stringify({
-    scenario: "causal fairness on/off",
-    ciFloor: CI_FLOOR,
-    premiumTarget: PREMIUM_TARGET,
-    runs: report,
-    summary
-  }));
+  console.log(JSON.stringify({ scenario: "causal fairness on/off", ciFloor: CI_FLOOR, runs: report }));
 });
