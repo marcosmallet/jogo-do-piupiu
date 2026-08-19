@@ -5,7 +5,7 @@ Jogo arcade em HTML5/Canvas feito para navegador, celular, gamepad e TV. A vers�
 ## Estrutura
 
 - `index.html`: núcleo do jogo, renderização Canvas, estados, trânsito, input e áudio base.
-- `aaa.js`: camada de game feel e progressão: combo, quase-acidentes, Adrenalina, Modo Pistola, fases da partida, carreira local e feedback audiovisual.
+- `aaa.js`: camada premium: combo, quase-acidentes, Adrenalina, Modo Pistola, fases, carreira local, feedback visual e trilha adaptativa procedural.
 - `android-tv/`: wrapper nativo Android TV em Kotlin com WebView protegida e assets locais.
 - `tests/`: regressão e sistemas premium com Playwright.
 - `.github/workflows/ci.yml`: validação automática web e Android.
@@ -14,17 +14,18 @@ O runtime continua sem framework web, backend ou recursos externos. A separaçã
 
 ## Jogabilidade
 
-O objetivo continua sendo atravessar as dez pistas, mas as partidas agora recompensam habilidade e risco:
+O objetivo continua sendo atravessar as dez pistas, mas as partidas recompensam habilidade e risco:
 
 - travessias consecutivas constroem combo e concedem pequeno bônus de tempo;
 - passar muito perto de um veículo gera um `QUASE!` e aumenta a Adrenalina;
 - ao atingir 100% de Adrenalina, o `Modo Pistola` cria uma janela curta de vantagem;
 - a pressão do trânsito sobe gradualmente durante a partida;
 - a direção visual muda em `Aquecimento`, `Pressão Subindo` e `Reta Final`;
+- a trilha procedural acompanha a partida, aumentando BPM e camadas conforme fase, combo e Modo Pistola;
 - ao fim da corrida o jogador recebe classe C/B/A/S;
 - corridas, melhor combo, melhor classe e quantidade de classes S persistem localmente.
 
-Efeitos caros são reduzidos automaticamente quando o gerenciador de desempenho detecta queda de FPS ou quando o sistema solicita movimento reduzido.
+Efeitos visuais e camadas de áudio são reduzidos automaticamente quando o gerenciador de desempenho detecta queda de FPS. O jogo também respeita preferência de movimento reduzido para os efeitos visuais.
 
 ## Rodar no navegador
 
@@ -48,7 +49,7 @@ Controles:
 
 Abra o jogo com `?debug=1`. Também é possível reduzir a duração da partida, por exemplo `?debug=1&duration=5`.
 
-O núcleo expõe `window.__gameTest`; a camada premium expõe `window.__aaaTest`. Eles permitem validar estado, pontuação, colisões, combo, Adrenalina, carreira e outras regras sem depender de interação manual.
+O núcleo expõe `window.__gameTest`; a camada premium expõe `window.__aaaTest`; a trilha adaptativa expõe `window.__scoreTest`. Esses hooks permitem validar regras e sincronização sem depender de interação manual.
 
 ## Testes web
 
@@ -60,7 +61,7 @@ npx playwright install chromium
 npm run test:web
 ```
 
-A suíte cobre, entre outros pontos, inicialização offline, pausa, recorde, colisão, renderização ociosa, combo, quase-acidente, Modo Pistola, progressão de carreira e fases da partida.
+A suíte cobre, entre outros pontos, inicialização offline, pausa, recorde, colisão, renderização ociosa, combo, quase-acidente, Modo Pistola, progressão de carreira, fases da partida e sincronização da trilha adaptativa.
 
 ## Android TV
 
@@ -79,11 +80,11 @@ Build de release não assinado:
 .\tools\Build-Release.ps1 -Clean
 ```
 
-A versão atual do aplicativo é `1.2.0` (`versionCode 3`). O APK de release precisa ser assinado com uma chave privada antes de distribuição pública.
+A versão atual do aplicativo é `1.3.0` (`versionCode 4`). O APK de release precisa ser assinado com uma chave privada antes de distribuição pública.
 
 ## Segurança e funcionamento offline
 
-O APK não solicita permissão `INTERNET`. A WebView bloqueia carregamentos de rede, acesso arbitrário a arquivos e navegação externa. `index.html` e `aaa.js` são copiados para os assets no build, portanto a camada premium também funciona offline.
+O APK não solicita permissão `INTERNET`. A WebView bloqueia carregamentos de rede, acesso arbitrário a arquivos e navegação externa. `index.html` e `aaa.js` são copiados para os assets no build, portanto sistemas premium e trilha procedural também funcionam offline.
 
 ## CI
 

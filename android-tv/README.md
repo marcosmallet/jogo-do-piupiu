@@ -2,7 +2,7 @@
 
 Aplicativo nativo para Android TV e Google TV 10 (API 29) ou superior. O APK empacota `index.html` e `aaa.js` da raiz e funciona sem internet.
 
-Versão atual do aplicativo: `1.2.0` (`versionCode 3`).
+Versão atual do aplicativo: `1.3.0` (`versionCode 4`).
 
 ## Ambiente
 
@@ -70,7 +70,7 @@ Eventos de mouse, touchpad, hover e toque são ignorados pelo WebView. O cursor 
 
 ## Camada premium
 
-O APK inclui os mesmos sistemas premium da versão web: combo, quase-acidentes, Adrenalina, Modo Pistola, progressão de intensidade, fases visuais e carreira local. A camada reduz efeitos automaticamente quando o jogo entra em modo de desempenho reduzido.
+O APK inclui combo, quase-acidentes, Adrenalina, Modo Pistola, progressão de intensidade, fases visuais, carreira local e trilha procedural adaptativa. A música reage à fase, Adrenalina e combo, e para junto com a partida. Efeitos/camadas são reduzidos quando o jogo entra em modo de baixo desempenho.
 
 ## Segurança e conteúdo offline
 
@@ -78,7 +78,7 @@ A WebView carrega somente os assets locais pelo `WebViewAssetLoader`. O aplicati
 
 ## Homologação física pendente
 
-A ausência do cursor precisa ser confirmada na TV real, pois alguns fabricantes podem desenhar um ponteiro fora da camada controlada pelo aplicativo. Durante o teste, valide também áudio, D-pad mantido, pausa, reinício, efeitos premium, 720p/1080p/4K e `adb logcat`.
+A ausência do cursor precisa ser confirmada na TV real, pois alguns fabricantes podem desenhar um ponteiro fora da camada controlada pelo aplicativo. Durante o teste, valide também áudio/trilha, D-pad mantido, pausa, reinício, efeitos premium, 720p/1080p/4K e `adb logcat`.
 
 ## Validação já executada no projeto
 
