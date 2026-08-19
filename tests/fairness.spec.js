@@ -95,7 +95,7 @@ test("moving traffic remains recurrently traversable across every difficulty", a
     const game = window.travessiaGame;
     const originalRandom = Math.random;
     const difficulties = ["easy", "normal", "hard"];
-    const seeds = [0xC0FFEE, 0x51A7E, 0xB1RD];
+    const seeds = [0xC0FFEE, 0x51A7E, 0xB17D];
 
     function seededRandom(seed) {
       let value = seed >>> 0;
