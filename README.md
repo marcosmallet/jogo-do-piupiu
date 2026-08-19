@@ -5,16 +5,18 @@ Jogo arcade em HTML5/Canvas feito para navegador, celular, gamepad e TV. A vers�
 ## Estrutura
 
 - `index.html`: núcleo do jogo, renderização Canvas, estados, trânsito, input e áudio base.
-- `aaa.js`: camada premium: combo, quase-acidentes, Adrenalina, Modo Pistola, fases, carreira local, feedback visual e trilha adaptativa procedural.
+- `aaa.js`: carregador síncrono da camada premium e dos controles horizontais.
+- `aaa-core.js`: camada premium original: combo, quase-acidentes, Adrenalina, Modo Pistola, fases, carreira local, feedback visual e trilha adaptativa procedural.
+- `horizontal-controls.js`: movimento lateral do personagem em teclado, touch, gamepad e Android TV.
 - `android-tv/`: wrapper nativo Android TV em Kotlin com WebView protegida e assets locais.
 - `tests/`: regressão e sistemas premium com Playwright.
 - `.github/workflows/ci.yml`: validação automática web e Android.
 
-O runtime continua sem framework web, backend ou recursos externos. A separação entre `index.html` e `aaa.js` mantém o núcleo estável e permite evoluir os sistemas premium de forma isolada; ambos são empacotados no APK.
+O runtime continua sem framework web, backend ou recursos externos. A separação mantém o núcleo estável e permite evoluir os sistemas premium e os controles de forma isolada; todos os arquivos necessários também são empacotados no APK.
 
 ## Jogabilidade
 
-O objetivo continua sendo atravessar as dez pistas, mas as partidas recompensam habilidade e risco:
+O objetivo continua sendo atravessar as dez pistas, mas agora o personagem pode se deslocar tanto verticalmente quanto lateralmente para procurar corredores e desviar do trânsito:
 
 - travessias consecutivas constroem combo e concedem pequeno bônus de tempo;
 - passar muito perto de um veículo gera um `QUASE!` e aumenta a Adrenalina;
@@ -39,17 +41,17 @@ Depois abra `http://localhost:8000`.
 
 Controles:
 
-- teclado: `↑`/`↓` ou `W`/`S`;
+- teclado: `↑`/`↓`/`←`/`→` ou `W`/`S`/`A`/`D`;
 - Enter: iniciar, confirmar e continuar;
 - Esc/Backspace: pausar/voltar;
-- touch: botões na tela;
-- gamepad/TV: direcional, botão principal, voltar e Start.
+- touch: quatro botões direcionais na tela;
+- gamepad/TV: direcional ou analógico, botão principal, voltar e Start.
 
 ## Modo de diagnóstico
 
 Abra o jogo com `?debug=1`. Também é possível reduzir a duração da partida, por exemplo `?debug=1&duration=5`.
 
-O núcleo expõe `window.__gameTest`; a camada premium expõe `window.__aaaTest`; a trilha adaptativa expõe `window.__scoreTest`. Esses hooks permitem validar regras e sincronização sem depender de interação manual.
+O núcleo expõe `window.__gameTest`; a camada premium expõe `window.__aaaTest`; a trilha adaptativa expõe `window.__scoreTest`; e o movimento horizontal expõe `window.__horizontalControlsTest`. Esses hooks permitem validar regras e sincronização sem depender de interação manual.
 
 ## Testes web
 
@@ -61,7 +63,7 @@ npx playwright install chromium
 npm run test:web
 ```
 
-A suíte cobre, entre outros pontos, inicialização offline, pausa, recorde, colisão, renderização ociosa, combo, quase-acidente, Modo Pistola, progressão de carreira, fases da partida e sincronização da trilha adaptativa.
+A suíte cobre, entre outros pontos, inicialização offline, pausa, recorde, colisão, renderização ociosa, movimento horizontal e limites laterais, combo, quase-acidente, Modo Pistola, progressão de carreira, fases da partida e sincronização da trilha adaptativa.
 
 ### Orçamento de performance
 
@@ -90,7 +92,7 @@ A versão atual do aplicativo é `1.3.0` (`versionCode 4`). O APK de release pre
 
 ## Segurança e funcionamento offline
 
-O APK não solicita permissão `INTERNET`. A WebView bloqueia carregamentos de rede, acesso arbitrário a arquivos e navegação externa. `index.html` e `aaa.js` são copiados para os assets no build, portanto sistemas premium e trilha procedural também funcionam offline.
+O APK não solicita permissão `INTERNET`. A WebView bloqueia carregamentos de rede, acesso arbitrário a arquivos e navegação externa. `index.html`, `aaa.js`, `aaa-core.js` e `horizontal-controls.js` são copiados para os assets no build, portanto sistemas premium, controles horizontais e trilha procedural também funcionam offline.
 
 ## CI
 
