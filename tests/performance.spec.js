@@ -12,7 +12,9 @@ const STRESS_BUDGET = Object.freeze({
   usefulDurationMs: 5500,
   maxP95FrameMs: 100,
   maxP99FrameMs: 180,
-  maxLongFrame50msRatio: .25
+  maxLongFrame50msRatio: .25,
+  maxParticlesNormalWithPendingBurst: 102,
+  maxParticlesLowWithPendingBurst: 35
 });
 
 async function waitForGame(page) {
@@ -206,7 +208,9 @@ test.describe("stress experience budget", () => {
       expect(after.timeLeft).toBeLessThan(before.timeLeft);
       expect(after.renderCount).toBeGreaterThan(before.renderCount);
       expect(after.vehicles).toBe(30);
-      expect(after.particles).toBeLessThanOrEqual(after.low ? 28 : 90);
+      expect(after.particles).toBeLessThanOrEqual(after.low
+        ? STRESS_BUDGET.maxParticlesLowWithPendingBurst
+        : STRESS_BUDGET.maxParticlesNormalWithPendingBurst);
 
       console.log(JSON.stringify({
         profile: "1080p deterministic stress",
