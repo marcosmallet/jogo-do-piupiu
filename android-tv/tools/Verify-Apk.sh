@@ -9,6 +9,13 @@ APKS=(
   "$DIST_DIR/travessia-canarinho-tv-release-unsigned.apk"
 )
 
+REQUIRED_ASSETS=(
+  "assets/index.html"
+  "assets/aaa.js"
+  "assets/aaa-core.js"
+  "assets/horizontal-controls.js"
+)
+
 find_apkanalyzer() {
   if command -v apkanalyzer >/dev/null 2>&1; then
     command -v apkanalyzer
@@ -47,9 +54,9 @@ verify_apk() {
 
   local entries
   entries="$(unzip -Z1 "$apk")"
-  for asset in assets/index.html assets/aaa.js; do
+  for asset in "${REQUIRED_ASSETS[@]}"; do
     if ! grep -Fxq "$asset" <<<"$entries"; then
-      echo "ERROR: $name is missing required premium asset: $asset" >&2
+      echo "ERROR: $name is missing required runtime asset: $asset" >&2
       return 1
     fi
     echo "asset: $asset [present]"
@@ -72,4 +79,4 @@ for apk in "${APKS[@]}"; do
   verify_apk "$apk"
 done
 
-echo "APK verification passed for debug and release: premium assets are packaged and INTERNET permission is absent."
+echo "APK verification passed for debug and release: HTML shell, premium runtime, runtime core, and horizontal controls are packaged; INTERNET permission is absent."
