@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 test('personagem move para esquerda e direita respeitando os limites', async ({ page }) => {
   await page.goto('/?debug=1');
