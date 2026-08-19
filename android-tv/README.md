@@ -1,8 +1,8 @@
 # Travessia do Canarinho para Android TV
 
-Aplicativo nativo para Android TV e Google TV 10 (API 29) ou superior. O APK empacota o `index.html` da raiz durante o build e funciona sem internet.
+Aplicativo nativo para Android TV e Google TV 10 (API 29) ou superior. O APK empacota `index.html` e `aaa.js` da raiz e funciona sem internet.
 
-Versão atual do aplicativo: `1.1.0` (`versionCode 2`).
+Versão atual do aplicativo: `1.2.0` (`versionCode 3`).
 
 ## Ambiente
 
@@ -41,7 +41,7 @@ android-tv\dist\travessia-canarinho-tv-release-unsigned.apk
 
 O APK de release é gerado sem assinatura. Para distribuição pública, assine-o com uma chave privada e preserve essa chave de forma segura para as próximas versões.
 
-O `index.html` não é duplicado no repositório. A tarefa `syncGameAsset` copia o arquivo atual para `app\build\generated\game-assets` antes de cada compilação.
+Os arquivos web não são duplicados manualmente. A tarefa `syncGameAsset` copia `index.html` e `aaa.js` para `app\build\generated\game-assets` antes de cada compilação.
 
 ## Instalar na TV
 
@@ -68,13 +68,17 @@ O script consulta a versão do Android e bloqueia a instalação abaixo da API 2
 
 Eventos de mouse, touchpad, hover e toque são ignorados pelo WebView. O cursor nativo usa `PointerIcon.TYPE_NULL`.
 
+## Camada premium
+
+O APK inclui os mesmos sistemas premium da versão web: combo, quase-acidentes, Adrenalina, Modo Pistola, progressão de intensidade, fases visuais e carreira local. A camada reduz efeitos automaticamente quando o jogo entra em modo de desempenho reduzido.
+
 ## Segurança e conteúdo offline
 
-A WebView carrega somente o asset local pelo `WebViewAssetLoader`. O aplicativo bloqueia carregamentos de rede, desativa acesso arbitrário a arquivos/conteúdo e não declara a permissão `INTERNET`. O debugging do WebView fica habilitado apenas em builds de debug.
+A WebView carrega somente os assets locais pelo `WebViewAssetLoader`. O aplicativo bloqueia carregamentos de rede, desativa acesso arbitrário a arquivos/conteúdo e não declara a permissão `INTERNET`. O debugging do WebView fica habilitado apenas em builds de debug.
 
 ## Homologação física pendente
 
-A ausência do cursor precisa ser confirmada na TV real, pois alguns fabricantes podem desenhar um ponteiro fora da camada controlada pelo aplicativo. Durante o teste, valide também áudio, D-pad mantido, pausa, reinício, 720p/1080p/4K e `adb logcat`.
+A ausência do cursor precisa ser confirmada na TV real, pois alguns fabricantes podem desenhar um ponteiro fora da camada controlada pelo aplicativo. Durante o teste, valide também áudio, D-pad mantido, pausa, reinício, efeitos premium, 720p/1080p/4K e `adb logcat`.
 
 ## Validação já executada no projeto
 
@@ -85,7 +89,6 @@ A ausência do cursor precisa ser confirmada na TV real, pois alguns fabricantes
 - API 29: D-pad mantido move, `keyup` libera o movimento e Voltar pausa/fecha
 - Android TV API 36, emulador 1080p: instalação, WebView e controles aprovados
 - API 36: callback moderno de Voltar validado em `playing -> paused`
-- Conteúdo offline: `assets/index.html` tem o mesmo SHA-256 do arquivo da raiz
 - Manifesto do APK: `minSdk=29`, `targetSdk=36`, Leanback e sem `INTERNET`
 
-A CI da raiz agora executa os testes unitários, Android Lint e builds debug/release em cada alteração. Isso complementa, mas não substitui, a homologação visual e de áudio em TV física.
+A CI da raiz executa testes web, testes unitários Android, Android Lint e builds debug/release em cada alteração. Isso complementa, mas não substitui a homologação visual e de áudio em TV física.
