@@ -30,6 +30,8 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
     const difficulties = ["easy", "normal", "hard"];
     const seeds = [0xC0FFEE, 0x51A7E, 0xB17D];
     const recentFairnessWindow = 4.5;
+    const crossingDuration = 0.48;
+    const safetyBuffer = 0.18;
 
     function seededRandom(seed) {
       let value = seed >>> 0;
@@ -39,15 +41,39 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       };
     }
 
-    function laneIsSafe(lane, horizon = .58) {
+    function vehicleTimeToCorridor(lane, vehicle) {
       const playerHalf = game.player.width * .4;
-      const left = game.player.x - playerHalf;
-      const right = game.player.x + playerHalf;
-      return lane.vehicles.every((vehicle) => {
-        const half = vehicle.width * .46;
-        const projected = vehicle.x + lane.direction * vehicle.speed * horizon;
-        return Math.max(vehicle.x, projected) + half < left || Math.min(vehicle.x, projected) - half > right;
-      });
+      const corridorLeft = game.player.x - playerHalf;
+      const corridorRight = game.player.x + playerHalf;
+      const vehicleHalf = vehicle.width * .46;
+      const vehicleLeft = vehicle.x - vehicleHalf;
+      const vehicleRight = vehicle.x + vehicleHalf;
+
+      if (vehicleRight >= corridorLeft && vehicleLeft <= corridorRight) return 0;
+
+      const effectiveSpeed = vehicle.fairnessHold ? 0 : Math.max(0, vehicle.speed);
+      if (effectiveSpeed <= 0) return Infinity;
+
+      if (lane.direction > 0) {
+        if (vehicleLeft > corridorRight) return Infinity;
+        return Math.max(0, (corridorLeft - vehicleRight) / effectiveSpeed);
+      }
+
+      if (vehicleRight < corridorLeft) return Infinity;
+      return Math.max(0, (vehicleLeft - corridorRight) / effectiveSpeed);
+    }
+
+    function assessLane(lane) {
+      let earliestArrival = Infinity;
+      for (const vehicle of lane.vehicles) {
+        earliestArrival = Math.min(earliestArrival, vehicleTimeToCorridor(lane, vehicle));
+      }
+      const safetyMargin = earliestArrival - crossingDuration;
+      return {
+        safe: safetyMargin >= safetyBuffer,
+        earliestArrival,
+        safetyMargin
+      };
     }
 
     function targetLane() {
@@ -72,6 +98,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       game.updateFairnessWindow = fairnessEnabled
         ? originalFairnessUpdate
         : function disabledFairness() { releaseFairnessHolds(); };
+
       game.resetGame(true);
       game.setDifficulty(difficulty);
       game.resetGame(true);
@@ -90,6 +117,10 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       let currentTarget = null;
       let waitStartedAt = 0;
       let simTime = 0;
+      let acceptedOpportunities = 0;
+      let rejectedOpportunities = 0;
+      let minAcceptedSafetyMargin = Infinity;
+      let minObservedSafetyMargin = Infinity;
       const waits = [];
       let spawned = 0;
       let despawned = 0;
@@ -106,9 +137,21 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
               currentTarget = candidate.index;
               waitStartedAt = simTime;
             }
-            if (laneIsSafe(candidate)) {
+
+            const assessment = assessLane(candidate);
+            if (Number.isFinite(assessment.safetyMargin)) {
+              minObservedSafetyMargin = Math.min(minObservedSafetyMargin, assessment.safetyMargin);
+            }
+
+            if (assessment.safe) {
               waits.push(Math.max(0, simTime - waitStartedAt));
+              acceptedOpportunities += 1;
+              if (Number.isFinite(assessment.safetyMargin)) {
+                minAcceptedSafetyMargin = Math.min(minAcceptedSafetyMargin, assessment.safetyMargin);
+              }
               committedLane = candidate.index;
+            } else {
+              rejectedOpportunities += 1;
             }
           }
 
@@ -120,8 +163,6 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
               currentTarget = null;
             }
           } else {
-            // No lane remains once the bird has cleared lane 0. Continue across
-            // the final grass strip until topGoal so a completed run is scored.
             game.input.up = !candidate && game.player.y > game.world.topGoal;
           }
         } else {
@@ -130,6 +171,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
 
         game.update(dt);
         if (game.fairnessActive) lastFairnessAt = simTime;
+
         if (game.score > previousScore) {
           const gained = game.score - previousScore;
           if (simTime - lastFairnessAt <= recentFairnessWindow) recentFairnessCrossings += gained;
@@ -150,6 +192,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       const pick = (fraction) => sortedWaits.length
         ? sortedWaits[Math.min(sortedWaits.length - 1, Math.floor((sortedWaits.length - 1) * fraction))]
         : 0;
+
       return {
         difficulty,
         seed,
@@ -161,7 +204,12 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
         medianWait: pick(.5),
         p90Wait: pick(.9),
         maxWait: sortedWaits.at(-1) || 0,
-        opportunities: waits.length,
+        acceptedOpportunities,
+        rejectedOpportunities,
+        minAcceptedSafetyMargin: Number.isFinite(minAcceptedSafetyMargin) ? minAcceptedSafetyMargin : null,
+        minObservedSafetyMargin: Number.isFinite(minObservedSafetyMargin) ? minObservedSafetyMargin : null,
+        crossingDuration,
+        safetyBuffer,
         spawned,
         despawned
       };
@@ -186,10 +234,15 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
   for (const run of report) {
     expect(run.spawned, `${run.difficulty}/${run.seed}: traffic must spawn`).toBeGreaterThan(0);
     expect(run.despawned, `${run.difficulty}/${run.seed}: traffic must despawn`).toBeGreaterThan(0);
-    expect(run.opportunities, `${run.difficulty}/${run.seed}: driver must observe opportunities`).toBeGreaterThan(0);
+    expect(run.acceptedOpportunities, `${run.difficulty}/${run.seed}: driver must accept opportunities`).toBeGreaterThan(0);
     expect(run.maxWait, `${run.difficulty}/${run.seed}: single-wait CI floor`).toBeLessThan(CI_FLOOR.maxSingleWaitSeconds);
+    expect(
+      run.minAcceptedSafetyMargin == null || run.minAcceptedSafetyMargin >= run.safetyBuffer,
+      `${run.difficulty}/${run.seed}: accepted lane must respect the TTC safety buffer`
+    ).toBe(true);
   }
 
+  const pairedSummary = [];
   for (const difficulty of ["easy", "normal", "hard"]) {
     const enabled = report.filter((run) => run.difficulty === difficulty && run.fairnessEnabled);
     const disabled = report.filter((run) => run.difficulty === difficulty && !run.fairnessEnabled);
@@ -199,10 +252,51 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
     const disabledMedianWait = percentile(disabled.map((run) => run.medianWait), .5);
     expect(disabledCrossings, `${difficulty}: completable without fairness`).toBeGreaterThanOrEqual(CI_FLOOR.minCrossingsPerDifficulty);
     expect(disabledMedianWait, `${difficulty}: median wait without fairness`).toBeLessThan(CI_FLOOR.maxMedianWaitSeconds);
+
+    const pairs = enabled.map((on, index) => {
+      const off = disabled[index];
+      return {
+        seed: on.seed,
+        on,
+        off,
+        delta: {
+          crossings: on.crossings - off.crossings,
+          collisions: on.collisions - off.collisions,
+          nearMisses: on.nearMisses - off.nearMisses,
+          medianWait: on.medianWait - off.medianWait,
+          p90Wait: on.p90Wait - off.p90Wait,
+          maxWait: on.maxWait - off.maxWait,
+          acceptedOpportunities: on.acceptedOpportunities - off.acceptedOpportunities,
+          rejectedOpportunities: on.rejectedOpportunities - off.rejectedOpportunities,
+          recentFairnessCrossings: on.recentFairnessCrossings - off.recentFairnessCrossings
+        }
+      };
+    });
+
+    pairedSummary.push({
+      difficulty,
+      pairs,
+      aggregateDelta: {
+        crossings: pairs.reduce((sum, pair) => sum + pair.delta.crossings, 0),
+        collisions: pairs.reduce((sum, pair) => sum + pair.delta.collisions, 0),
+        nearMisses: pairs.reduce((sum, pair) => sum + pair.delta.nearMisses, 0),
+        medianWait: percentile(pairs.map((pair) => pair.delta.medianWait), .5),
+        p90Wait: percentile(pairs.map((pair) => pair.delta.p90Wait), .5),
+        maxWait: Math.max(...pairs.map((pair) => pair.delta.maxWait)),
+        acceptedOpportunities: pairs.reduce((sum, pair) => sum + pair.delta.acceptedOpportunities, 0),
+        rejectedOpportunities: pairs.reduce((sum, pair) => sum + pair.delta.rejectedOpportunities, 0),
+        recentFairnessCrossings: pairs.reduce((sum, pair) => sum + pair.delta.recentFairnessCrossings, 0)
+      }
+    });
   }
 
-  // Collision counts remain diagnostic output. This simulated driver uses a
-  // short-horizon lane heuristic and is intentionally not a skilled-player model,
-  // so its collision ratio must not be treated as a gameplay balance gate.
-  console.log(JSON.stringify({ scenario: "causal fairness on/off", ciFloor: CI_FLOOR, runs: report }));
+  // The first TTC-driver run is intentionally observational. Once a reproducible
+  // baseline is captured in CI, paired ON/OFF deltas can become causal gates
+  // without baking arbitrary balance assumptions into the test.
+  console.log(JSON.stringify({
+    scenario: "causal fairness on/off with TTC driver",
+    ciFloor: CI_FLOOR,
+    runs: report,
+    pairedSummary
+  }));
 });
