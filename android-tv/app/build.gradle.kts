@@ -7,6 +7,8 @@ val generatedGameAssets = layout.buildDirectory.dir("generated/game-assets")
 val syncGameAsset by tasks.registering(Sync::class) {
     from(rootProject.layout.projectDirectory.file("../index.html"))
     from(rootProject.layout.projectDirectory.file("../aaa.js"))
+    from(rootProject.layout.projectDirectory.file("../aaa-core.js"))
+    from(rootProject.layout.projectDirectory.file("../horizontal-controls.js"))
     into(generatedGameAssets)
 }
 
