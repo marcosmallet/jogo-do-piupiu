@@ -9,6 +9,11 @@ const CI_FLOOR = Object.freeze({
   maxSingleWaitSeconds: 14
 });
 
+// Extra TTC margin reserved for the deterministic driver's decision/command latency.
+// This is intentionally independent from physical lane-crossing time, which is derived
+// below from the runtime's minimumOpenTime() contract for the active difficulty.
+const DRIVER_DECISION_BUFFER_SECONDS = 0.18;
+
 async function waitForGame(page) {
   await page.waitForFunction(() => Boolean(window.travessiaGame && window.__gameTest && window.__aaaTest));
 }
@@ -23,15 +28,13 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
   await page.goto("/?debug=1&duration=40");
   await waitForGame(page);
 
-  const report = await page.evaluate(() => {
+  const report = await page.evaluate(({ driverDecisionBufferSeconds }) => {
     const game = window.travessiaGame;
     const originalRandom = Math.random;
     const originalFairnessUpdate = game.updateFairnessWindow;
     const difficulties = ["easy", "normal", "hard"];
     const seeds = [0xC0FFEE, 0x51A7E, 0xB17D];
     const recentFairnessWindow = 4.5;
-    const crossingDuration = 0.48;
-    const safetyBuffer = 0.18;
 
     function seededRandom(seed) {
       let value = seed >>> 0;
@@ -63,7 +66,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       return Math.max(0, (vehicleLeft - corridorRight) / effectiveSpeed);
     }
 
-    function assessLane(lane) {
+    function assessLane(lane, crossingDuration, safetyBuffer) {
       let earliestArrival = Infinity;
       for (const vehicle of lane.vehicles) {
         earliestArrival = Math.min(earliestArrival, vehicleTimeToCorridor(lane, vehicle));
@@ -108,6 +111,12 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       game.startGame();
       game.input.clear();
 
+      const laneContract = game.lanes[0];
+      const minimumOpenTime = laneContract.minimumOpenTime(game.difficultySettings);
+      const reactionTime = game.difficultySettings.reactionTime;
+      const crossingDuration = minimumOpenTime - reactionTime;
+      const safetyBuffer = driverDecisionBufferSeconds;
+
       const dt = 1 / 60;
       const maxSteps = Math.ceil(38 / dt);
       let previousScore = 0;
@@ -138,7 +147,7 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
               waitStartedAt = simTime;
             }
 
-            const assessment = assessLane(candidate);
+            const assessment = assessLane(candidate, crossingDuration, safetyBuffer);
             if (Number.isFinite(assessment.safetyMargin)) {
               minObservedSafetyMargin = Math.min(minObservedSafetyMargin, assessment.safetyMargin);
             }
@@ -208,8 +217,11 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
         rejectedOpportunities,
         minAcceptedSafetyMargin: Number.isFinite(minAcceptedSafetyMargin) ? minAcceptedSafetyMargin : null,
         minObservedSafetyMargin: Number.isFinite(minObservedSafetyMargin) ? minObservedSafetyMargin : null,
+        minimumOpenTime,
+        reactionTime,
         crossingDuration,
         safetyBuffer,
+        safetyBufferBasis: "deterministic driver decision/command latency",
         spawned,
         despawned
       };
@@ -229,13 +241,18 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
       game.updateFairnessWindow = originalFairnessUpdate;
       game.input.clear();
     }
-  });
+  }, { driverDecisionBufferSeconds: DRIVER_DECISION_BUFFER_SECONDS });
 
   for (const run of report) {
     expect(run.spawned, `${run.difficulty}/${run.seed}: traffic must spawn`).toBeGreaterThan(0);
     expect(run.despawned, `${run.difficulty}/${run.seed}: traffic must despawn`).toBeGreaterThan(0);
     expect(run.acceptedOpportunities, `${run.difficulty}/${run.seed}: driver must accept opportunities`).toBeGreaterThan(0);
     expect(run.maxWait, `${run.difficulty}/${run.seed}: single-wait CI floor`).toBeLessThan(CI_FLOOR.maxSingleWaitSeconds);
+    expect(run.minimumOpenTime - run.reactionTime, `${run.difficulty}/${run.seed}: crossing duration must come from runtime contract`)
+      .toBeCloseTo(run.crossingDuration, 10);
+    expect(run.crossingDuration, `${run.difficulty}/${run.seed}: physical crossing duration must be positive`).toBeGreaterThan(0);
+    expect(run.safetyBuffer, `${run.difficulty}/${run.seed}: decision buffer must be independent and positive`).toBe(DRIVER_DECISION_BUFFER_SECONDS);
+    expect(run.safetyBuffer, `${run.difficulty}/${run.seed}: decision buffer cannot replace physical crossing time`).toBeLessThan(run.crossingDuration);
     expect(
       run.minAcceptedSafetyMargin == null || run.minAcceptedSafetyMargin >= run.safetyBuffer,
       `${run.difficulty}/${run.seed}: accepted lane must respect the TTC safety buffer`
@@ -290,11 +307,12 @@ test("fairness corridor has causal ON/OFF evidence with identical seeds", async 
     });
   }
 
-  // The first TTC-driver run is intentionally observational. Once a reproducible
-  // baseline is captured in CI, paired ON/OFF deltas can become causal gates
-  // without baking arbitrary balance assumptions into the test.
+  // This TTC-driver run remains observational until a reproducible baseline is captured.
+  // Once observed, paired ON/OFF deltas can become causal gates without inventing balance thresholds.
   console.log(JSON.stringify({
-    scenario: "causal fairness on/off with TTC driver",
+    scenario: "causal fairness on/off with runtime-derived TTC driver",
+    driverDecisionBufferSeconds: DRIVER_DECISION_BUFFER_SECONDS,
+    driverDecisionBufferBasis: "deterministic driver decision/command latency",
     ciFloor: CI_FLOOR,
     runs: report,
     pairedSummary
