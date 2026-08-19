@@ -63,6 +63,12 @@ npm run test:web
 
 A suíte cobre, entre outros pontos, inicialização offline, pausa, recorde, colisão, renderização ociosa, combo, quase-acidente, Modo Pistola, progressão de carreira, fases da partida e sincronização da trilha adaptativa.
 
+### Orçamento de performance
+
+Os limites executados em CI são deliberadamente tolerantes e servem como **piso de regressão**, não como selo de qualidade gráfica. Há também um cenário determinístico de stress em 1080p com 30 veículos, emissão sustentada de partículas e Modo Pistola por pelo menos 5 segundos úteis. Ele registra p50/p95/p99 de frame time, long frames acima de 32/50 ms e degradação adaptativa.
+
+A meta de experiência é **50–60 FPS em 720p/1080p em hardware razoável**, com redução graciosa de efeitos em TVs fracas antes de comprometer input, cronômetro ou fairness. GitHub-hosted runners não são tratados como benchmark de GPU; os thresholds de CI existem para detectar regressões severas e stutter anormal.
+
 ## Android TV
 
 O aplicativo exige Android TV/Google TV 10 (API 29) ou superior. Consulte `android-tv/README.md` para SDK, build, instalação via ADB e homologação física.
