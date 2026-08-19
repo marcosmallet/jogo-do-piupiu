@@ -6,6 +6,7 @@ val generatedGameAssets = layout.buildDirectory.dir("generated/game-assets")
 
 val syncGameAsset by tasks.registering(Sync::class) {
     from(rootProject.layout.projectDirectory.file("../index.html"))
+    from(rootProject.layout.projectDirectory.file("../aaa.js"))
     into(generatedGameAssets)
 }
 
@@ -17,8 +18,8 @@ android {
         applicationId = "br.com.travessiadocanarinho.tv"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
     }
 
     sourceSets {
