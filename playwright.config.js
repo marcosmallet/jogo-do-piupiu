@@ -5,6 +5,10 @@ export default defineConfig({
   timeout: 15_000,
   expect: { timeout: 5_000 },
   fullyParallel: true,
+  reporter: [
+    ["line"],
+    ["./scripts/horizontal-agency-reporter.mjs"]
+  ],
   use: {
     baseURL: "http://127.0.0.1:4173",
     headless: true,
