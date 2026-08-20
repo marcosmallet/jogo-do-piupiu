@@ -5,6 +5,11 @@ export default defineConfig({
   timeout: 15_000,
   expect: { timeout: 5_000 },
   fullyParallel: true,
+  // Shared GitHub-hosted runners make frame-cadence assertions noisy when the
+  // performance suite competes with CPU-heavy fairness simulations. Keep local
+  // development parallel, but isolate CI tests so FPS gates measure the game
+  // rather than cross-worker contention. Thresholds remain unchanged.
+  workers: process.env.CI ? 1 : undefined,
   reporter: [
     ["line"],
     ["./scripts/horizontal-agency-reporter.mjs"]
