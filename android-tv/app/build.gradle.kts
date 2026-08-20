@@ -9,6 +9,7 @@ val syncGameAsset by tasks.registering(Sync::class) {
     from(rootProject.layout.projectDirectory.file("../aaa.js"))
     from(rootProject.layout.projectDirectory.file("../aaa-core.js"))
     from(rootProject.layout.projectDirectory.file("../horizontal-controls.js"))
+    from(rootProject.layout.projectDirectory.file("../multiplayer.js"))
     into(generatedGameAssets)
 }
 
