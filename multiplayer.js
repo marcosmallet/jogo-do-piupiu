@@ -48,9 +48,12 @@
       if (game.playerMode === 1) { game.players = [game.player]; game.playerScores[0] = game.score; return; }
       if (!game.players[1]) game.players[1] = makePlayer(game.world, 1);
       game.players[0] = game.player;
-      const spread = game.world.laneH * 1.1;
-      game.players[0].x = game.world.width / 2 - spread;
-      if (reset) { game.players[0].reset(game.world); game.players[0].x = game.world.width / 2 - spread; game.players[1].reset(game.world); }
+      if (reset) {
+        const spread = game.world.laneH * 1.1;
+        game.players[0].reset(game.world);
+        game.players[0].x = game.world.width / 2 - spread;
+        game.players[1].reset(game.world);
+      }
     }
 
     const style = document.createElement("style");
