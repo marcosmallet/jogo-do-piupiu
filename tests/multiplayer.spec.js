@@ -20,6 +20,12 @@ test("WASD moves only P1 and arrows move only P2", async ({ page }) => {
   await page.evaluate(() => window.__gameTest.setPlayerMode(2));
   await page.keyboard.press("Enter");
 
+  // The game intentionally spawns players at bottomSafeCenter, just outside the
+  // normal movement clamp, then the first update settles them to bottomLimit.
+  // Normalize that startup state before measuring input isolation so the clamp
+  // itself is not mistaken for movement from the other player's controls.
+  await page.evaluate(() => window.travessiaGame.updatePlayer(0));
+
   const p1Step = await page.evaluate(() => {
     const before = window.__gameTest.multiplayerSnapshot();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "w", code: "KeyW", bubbles: true }));
