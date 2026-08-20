@@ -32,14 +32,25 @@ test("WASD moves only P1 and arrows move only P2", async ({ page }) => {
 test("collision and score are isolated per player", async ({ page }) => {
   await page.evaluate(() => window.__gameTest.setPlayerMode(2));
   await page.keyboard.press("Enter");
-  const before = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
-  await page.evaluate(() => window.__gameTest.forceCollisionForPlayer(1));
-  const collision = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
-  expect(collision.players[0].invulnerable).toBeGreaterThan(0);
-  expect(collision.players[1].invulnerable).toBe(0);
-  expect(collision.players[1].y).toBeCloseTo(before.players[1].y, 3);
-  await page.evaluate(() => window.__gameTest.forceScoreForPlayer(2));
-  const score = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+
+  // Capture both snapshots and apply the collision in the same browser task.
+  // This prevents requestAnimationFrame from advancing an otherwise independent
+  // player between observations and makes the assertion test collision causality.
+  const collision = await page.evaluate(() => {
+    const before = window.__gameTest.multiplayerSnapshot();
+    window.__gameTest.forceCollisionForPlayer(1);
+    const after = window.__gameTest.multiplayerSnapshot();
+    return { before, after };
+  });
+
+  expect(collision.after.players[0].invulnerable).toBeGreaterThan(0);
+  expect(collision.after.players[1].invulnerable).toBe(0);
+  expect(collision.after.players[1].y).toBeCloseTo(collision.before.players[1].y, 3);
+
+  const score = await page.evaluate(() => {
+    window.__gameTest.forceScoreForPlayer(2);
+    return window.__gameTest.multiplayerSnapshot();
+  });
   expect(score.scores).toEqual([0, 1]);
 });
 
