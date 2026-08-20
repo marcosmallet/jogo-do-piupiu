@@ -19,14 +19,26 @@ test("keeps 1P as default and enables two independent players", async ({ page })
 test("WASD moves only P1 and arrows move only P2", async ({ page }) => {
   await page.evaluate(() => window.__gameTest.setPlayerMode(2));
   await page.keyboard.press("Enter");
-  const before = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
-  await page.keyboard.down("KeyW"); await page.waitForTimeout(120); await page.keyboard.up("KeyW");
-  const afterP1 = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
-  expect(afterP1.players[0].y).toBeLessThan(before.players[0].y);
-  expect(afterP1.players[1].y).toBeCloseTo(before.players[1].y, 3);
-  await page.keyboard.down("ArrowUp"); await page.waitForTimeout(120); await page.keyboard.up("ArrowUp");
-  const afterP2 = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
-  expect(afterP2.players[1].y).toBeLessThan(afterP1.players[1].y);
+
+  const p1Step = await page.evaluate(() => {
+    const before = window.__gameTest.multiplayerSnapshot();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "w", code: "KeyW", bubbles: true }));
+    window.travessiaGame.updatePlayer(.12);
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "w", code: "KeyW", bubbles: true }));
+    return { before, after: window.__gameTest.multiplayerSnapshot() };
+  });
+  expect(p1Step.after.players[0].y).toBeLessThan(p1Step.before.players[0].y);
+  expect(p1Step.after.players[1].y).toBeCloseTo(p1Step.before.players[1].y, 3);
+
+  const p2Step = await page.evaluate(() => {
+    const before = window.__gameTest.multiplayerSnapshot();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", code: "ArrowUp", bubbles: true }));
+    window.travessiaGame.updatePlayer(.12);
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowUp", code: "ArrowUp", bubbles: true }));
+    return { before, after: window.__gameTest.multiplayerSnapshot() };
+  });
+  expect(p2Step.after.players[1].y).toBeLessThan(p2Step.before.players[1].y);
+  expect(p2Step.after.players[0].y).toBeCloseTo(p2Step.before.players[0].y, 3);
 });
 
 test("A and D move only P1 laterally and stop on keyup", async ({ page }) => {
