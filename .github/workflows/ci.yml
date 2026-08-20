@@ -30,6 +30,27 @@ jobs:
         run: npm run test:web
       - name: Validate horizontal agency observability
         run: node scripts/validate-horizontal-agency-baseline.mjs
+      - name: Preserve first horizontal agency baseline
+        run: |
+          cp test-results/horizontal-agency-baseline.json "$RUNNER_TEMP/horizontal-agency-baseline-first.json"
+          cp test-results/horizontal-agency-summary.md "$RUNNER_TEMP/horizontal-agency-summary-first.md"
+      - name: Replay horizontal agency baseline
+        run: npx playwright test tests/horizontal-agency.spec.js --workers=1
+      - name: Validate replayed horizontal agency baseline
+        run: node scripts/validate-horizontal-agency-baseline.mjs
+      - name: Prove horizontal agency baseline reproducibility
+        run: |
+          if ! cmp -s "$RUNNER_TEMP/horizontal-agency-baseline-first.json" test-results/horizontal-agency-baseline.json; then
+            echo "Horizontal agency JSON drifted between identical runs." >&2
+            diff -u "$RUNNER_TEMP/horizontal-agency-baseline-first.json" test-results/horizontal-agency-baseline.json || true
+            exit 1
+          fi
+          if ! cmp -s "$RUNNER_TEMP/horizontal-agency-summary-first.md" test-results/horizontal-agency-summary.md; then
+            echo "Horizontal agency Markdown summary drifted between identical runs." >&2
+            diff -u "$RUNNER_TEMP/horizontal-agency-summary-first.md" test-results/horizontal-agency-summary.md || true
+            exit 1
+          fi
+          echo "Horizontal agency baseline reproduced exactly across two runs."
       - name: Publish horizontal agency summary
         if: always()
         run: |
