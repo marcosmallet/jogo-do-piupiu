@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 async function openGame(page) {
-  await page.goto("/?debug=1&duration=5");
+  await page.goto("/?debug=1&duration=10");
   await page.waitForFunction(() => Boolean(window.__gameTest?.setPlayerMode));
 }
 
@@ -27,6 +27,77 @@ test("WASD moves only P1 and arrows move only P2", async ({ page }) => {
   await page.keyboard.down("ArrowUp"); await page.waitForTimeout(120); await page.keyboard.up("ArrowUp");
   const afterP2 = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
   expect(afterP2.players[1].y).toBeLessThan(afterP1.players[1].y);
+});
+
+test("A and D move only P1 laterally and stop on keyup", async ({ page }) => {
+  await page.evaluate(() => window.__gameTest.setPlayerMode(2));
+  await page.keyboard.press("Enter");
+  const start = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+
+  await page.keyboard.down("KeyA");
+  await page.waitForTimeout(140);
+  await page.keyboard.up("KeyA");
+  const afterA = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  expect(afterA.players[0].x).toBeLessThan(start.players[0].x);
+  expect(afterA.players[1].x).toBeCloseTo(start.players[1].x, 3);
+
+  await page.waitForTimeout(100);
+  const afterAReleased = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  expect(afterAReleased.players[0].x).toBeCloseTo(afterA.players[0].x, 3);
+
+  await page.keyboard.down("KeyD");
+  await page.waitForTimeout(140);
+  await page.keyboard.up("KeyD");
+  const afterD = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  expect(afterD.players[0].x).toBeGreaterThan(afterAReleased.players[0].x);
+  expect(afterD.players[1].x).toBeCloseTo(start.players[1].x, 3);
+});
+
+test("P1 and P2 can move laterally at the same time without overwriting each other", async ({ page }) => {
+  await page.evaluate(() => window.__gameTest.setPlayerMode(2));
+  await page.keyboard.press("Enter");
+  const before = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+
+  await page.keyboard.down("KeyD");
+  await page.keyboard.down("ArrowLeft");
+  await page.waitForTimeout(140);
+  await page.keyboard.up("KeyD");
+  await page.keyboard.up("ArrowLeft");
+
+  const after = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  expect(after.players[0].x).toBeGreaterThan(before.players[0].x);
+  expect(after.players[1].x).toBeLessThan(before.players[1].x);
+});
+
+test("P1 lateral movement respects world bounds", async ({ page }) => {
+  await page.evaluate(() => window.__gameTest.setPlayerMode(2));
+  await page.keyboard.press("Enter");
+  const bounds = await page.evaluate(() => ({
+    min: window.__horizontalControlsTest.minX,
+    max: window.__horizontalControlsTest.maxX,
+    y: window.__gameTest.multiplayerSnapshot().players[0].y
+  }));
+
+  await page.evaluate(({ y }) => window.__gameTest.setPlayerPosition(1, 0, y), bounds);
+  await page.keyboard.down("KeyA"); await page.waitForTimeout(120); await page.keyboard.up("KeyA");
+  const left = await page.evaluate(() => window.__gameTest.multiplayerSnapshot().players[0].x);
+  expect(left).toBeCloseTo(bounds.min, 3);
+
+  await page.evaluate(({ max, y }) => window.__gameTest.setPlayerPosition(1, max + 1000, y), bounds);
+  await page.keyboard.down("KeyD"); await page.waitForTimeout(120); await page.keyboard.up("KeyD");
+  const right = await page.evaluate(() => window.__gameTest.multiplayerSnapshot().players[0].x);
+  expect(right).toBeCloseTo(bounds.max, 3);
+});
+
+test("1P keeps A and D horizontal controls", async ({ page }) => {
+  await page.keyboard.press("Enter");
+  const before = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  await page.keyboard.down("KeyA"); await page.waitForTimeout(120); await page.keyboard.up("KeyA");
+  const afterA = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  expect(afterA.players[0].x).toBeLessThan(before.players[0].x);
+  await page.keyboard.down("KeyD"); await page.waitForTimeout(120); await page.keyboard.up("KeyD");
+  const afterD = await page.evaluate(() => window.__gameTest.multiplayerSnapshot());
+  expect(afterD.players[0].x).toBeGreaterThan(afterA.players[0].x);
 });
 
 test("collision and score are isolated per player", async ({ page }) => {
